@@ -37,9 +37,9 @@ jobs:
         run: |
           pytest tests/ --cov=rdd --cov-report=xml --cov-report=term
 
-      - name: Upload coverage report to Codecov
+      - name: Upload coverage report to Codecov (without token)
         uses: codecov/codecov-action@v3
         with:
           files: ./coverage.xml
-          fail_ci_if_error: true
+          fail_ci_if_error: false  # Prevents CI from failing if Codecov is rate-limited
           verbose: true
