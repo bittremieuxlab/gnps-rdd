@@ -40,7 +40,9 @@ def sort_nodes_by_flow(flows_df, processes_df):
     """
     # Handle missing "id" column by using unique nodes from flows_df
     if "id" not in processes_df.columns:
-        unique_nodes = pd.concat([flows_df["source"], flows_df["target"]]).unique()
+        unique_nodes = pd.concat(
+            [flows_df["source"], flows_df["target"]]
+        ).unique()
         processes_df = pd.DataFrame(
             {"id": unique_nodes, "level": 0}
         )  # Assign default level
@@ -72,7 +74,9 @@ def sort_nodes_by_flow(flows_df, processes_df):
     )
 
     # Subsequent levels: Align with previous levels
-    for level in range(first_level_new + 1, max(nodes_per_level_new.keys()) + 1):
+    for level in range(
+        first_level_new + 1, max(nodes_per_level_new.keys()) + 1
+    ):
         if level in nodes_per_level_new:
             previous_level_nodes = sorted_nodes_per_level_new[level - 1]
             current_level_nodes = nodes_per_level_new[level]
@@ -84,14 +88,18 @@ def sort_nodes_by_flow(flows_df, processes_df):
                     row["source"] in previous_level_nodes
                     and row["target"] in current_level_nodes
                 ):
-                    connections_new[row["source"]].append((row["target"], row["value"]))
+                    connections_new[row["source"]].append(
+                        (row["target"], row["value"])
+                    )
 
             # Sort current level nodes based on previous level
             sorted_current_level_new = []
             for prev_node in previous_level_nodes:
                 if prev_node in connections_new:
                     sorted_connections_new = sorted(
-                        connections_new[prev_node], key=lambda x: x[1], reverse=True
+                        connections_new[prev_node],
+                        key=lambda x: x[1],
+                        reverse=True,
                     )
                     sorted_current_level_new.extend(
                         [target for target, _ in sorted_connections_new]
@@ -237,7 +245,11 @@ def filter_and_group_RDD_counts(
             .reset_index()
         )
     else:
-        data = filtered_counts.groupby("reference_type")["count"].sum().reset_index()
+        data = (
+            filtered_counts.groupby("reference_type")["count"]
+            .sum()
+            .reset_index()
+        )
 
     return data
 
@@ -285,7 +297,9 @@ def prepare_boxplot_data(
         df_long = df_long[df_long["reference_type"].isin(reference_types)]
 
     if df_long.empty:
-        raise ValueError("No data available for the specified reference types.")
+        raise ValueError(
+            "No data available for the specified reference types."
+        )
 
     return df_long
 
@@ -334,7 +348,11 @@ def prepare_heatmap_data(
 
 class MatplotlibBackend(VisualizationBackend):
     def plot_reference_type_distribution(
-        self, data: pd.DataFrame, group_by: bool, figsize: Tuple[int, int], **kwargs
+        self,
+        data: pd.DataFrame,
+        group_by: bool,
+        figsize: Tuple[int, int],
+        **kwargs,
     ):
         fig, ax = plt.subplots(figsize=figsize)
 
@@ -457,7 +475,9 @@ class MatplotlibBackend(VisualizationBackend):
             The rendered Matplotlib figure.
         """
         plt.figure(figsize=figsize)
-        ax = sns.heatmap(data, cmap="viridis", annot=False, cbar=True, **kwargs)
+        ax = sns.heatmap(
+            data, cmap="viridis", annot=False, cbar=True, **kwargs
+        )
         ax.set_title(f"Proportion Heatmap of reference types (Level {level})")
         ax.set_xlabel("reference types")
         ax.set_ylabel("Samples")
@@ -516,8 +536,12 @@ class MatplotlibBackend(VisualizationBackend):
             sns.scatterplot(x=x_pc, y=y_pc, data=pca_df, ax=ax)
 
         ax.set_title("PCA Plot of RDD Counts")
-        ax.set_xlabel(f"{x_pc} [{explained_variance[int(x_pc[2]) - 1] * 100:.1f}%]")
-        ax.set_ylabel(f"{y_pc} [{explained_variance[int(y_pc[2]) - 1] * 100:.1f}%]")
+        ax.set_xlabel(
+            f"{x_pc} [{explained_variance[int(x_pc[2]) - 1] * 100:.1f}%]"
+        )
+        ax.set_ylabel(
+            f"{y_pc} [{explained_variance[int(y_pc[2]) - 1] * 100:.1f}%]"
+        )
         plt.tight_layout()
 
         return fig
@@ -583,7 +607,11 @@ class MatplotlibBackend(VisualizationBackend):
 
 class PlotlyBackend(VisualizationBackend):
     def plot_reference_type_distribution(
-        self, data: pd.DataFrame, group_by: bool, figsize: Tuple[int, int], **kwargs
+        self,
+        data: pd.DataFrame,
+        group_by: bool,
+        figsize: Tuple[int, int],
+        **kwargs,
     ):
         """
         Render a bar chart for reference type distribution using Plotly.
@@ -652,7 +680,11 @@ class PlotlyBackend(VisualizationBackend):
                         jitter=0.3,
                         pointpos=0,
                         marker=dict(
-                            color=group_colors.get(group) if group_colors else None
+                            color=(
+                                group_colors.get(group)
+                                if group_colors
+                                else None
+                            )
                         ),
                         offsetgroup=i,
                     )
@@ -670,9 +702,11 @@ class PlotlyBackend(VisualizationBackend):
                         jitter=0.3,
                         pointpos=0,
                         marker=dict(
-                            color=group_colors.get(reference_type)
-                            if group_colors
-                            else None
+                            color=(
+                                group_colors.get(reference_type)
+                                if group_colors
+                                else None
+                            )
                         ),
                     )
                 )
@@ -775,7 +809,11 @@ class PlotlyBackend(VisualizationBackend):
                         mode="markers",
                         name=group,
                         marker=dict(
-                            color=group_colors.get(group) if group_colors else None
+                            color=(
+                                group_colors.get(group)
+                                if group_colors
+                                else None
+                            )
                         ),
                     )
                 )
@@ -869,7 +907,8 @@ class PlotlyBackend(VisualizationBackend):
         """
         # Generate flows and processes using RDDCounts
         flows_df, processes_df = RDD_counts.generate_RDDflows(
-            max_hierarchy_level=max_hierarchy_level, filename_filter=filename_filter
+            max_hierarchy_level=max_hierarchy_level,
+            filename_filter=filename_filter,
         )
 
         # Sort nodes to minimize crossings
@@ -884,11 +923,14 @@ class PlotlyBackend(VisualizationBackend):
         color_df = pd.read_csv(color_mapping_file, sep=";")
         color_df["color_code"] = color_df["color_code"].fillna("#D3D3D3")
         color_mapping = {
-            row["descriptor"]: row["color_code"] for _, row in color_df.iterrows()
+            row["descriptor"]: row["color_code"]
+            for _, row in color_df.iterrows()
         }
 
         # Assign colors to nodes and links
-        node_colors = [color_mapping.get(node, "#D3D3D3") for node in sorted_nodes]
+        node_colors = [
+            color_mapping.get(node, "#D3D3D3") for node in sorted_nodes
+        ]
         link_colors = [
             color_mapping.get(node, "#D3D3D3") for node in flows_df["source"]
         ]
@@ -1023,7 +1065,9 @@ class Visualizer:  # pragma: no cover
             The rendered figure object.
         """
         # Prepare data
-        data = prepare_boxplot_data(RDD_counts_instance, level, reference_types)
+        data = prepare_boxplot_data(
+            RDD_counts_instance, level, reference_types
+        )
 
         # Render using the backend
         return self.backend.box_plot_RDD_proportions(
@@ -1062,7 +1106,9 @@ class Visualizer:  # pragma: no cover
             The rendered heatmap.
         """
         # Prepare data
-        data = prepare_heatmap_data(RDD_counts_instance, level, reference_types)
+        data = prepare_heatmap_data(
+            RDD_counts_instance, level, reference_types
+        )
 
         # Render using the backend
         return self.backend.plot_RDD_proportion_heatmap(

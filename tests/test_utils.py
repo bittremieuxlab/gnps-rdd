@@ -7,7 +7,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 from importlib import resources
 
-project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "rdd"))
+project_path = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "rdd")
+)
 sys.path.append(project_path)
 
 from RDDcounts import RDDCounts
@@ -159,7 +161,8 @@ def test_invalid_metadata_format():
 
 def test_missing_metadata_file():
     with pytest.raises(
-        FileNotFoundError, match="External metadata file 'missing_file.csv' not found."
+        FileNotFoundError,
+        match="External metadata file 'missing_file.csv' not found.",
     ):
         _load_RDD_metadata("missing_file.csv")
 
@@ -178,7 +181,9 @@ def mock_resources(monkeypatch):
 def test_load_external_metadata(tmp_path):
     # Create a mock external metadata file
     metadata_file = tmp_path / "external_metadata.csv"
-    metadata_file.write_text("filename,sample_type\nfile1,complex\nfile2,plant")
+    metadata_file.write_text(
+        "filename,sample_type\nfile1,complex\nfile2,plant"
+    )
 
     metadata = _load_RDD_metadata(str(metadata_file))
     assert not metadata.empty

@@ -69,7 +69,9 @@ class RDDCounts:
         """
         # Load GNPS network data
         self.gnps_network = pd.read_csv(gnps_network, sep="\t")
-        self.RDD_metadata = _load_RDD_metadata(external_metadata=external_metadata)
+        self.RDD_metadata = _load_RDD_metadata(
+            external_metadata=external_metadata
+        )
         self.sample_types = _load_sample_types(self.RDD_metadata, sample_types)
         self.sample_groups = sample_groups
         self.reference_groups = reference_groups
@@ -96,11 +98,15 @@ class RDDCounts:
         df_filtered = self.gnps_network[
             ~self.gnps_network["DefaultGroups"].str.contains(",")
         ]
-        df_selected = df_filtered[df_filtered["DefaultGroups"].isin(self.sample_groups)]
+        df_selected = df_filtered[
+            df_filtered["DefaultGroups"].isin(self.sample_groups)
+        ]
         df_exploded_files = df_selected.assign(
             UniqueFileSources=df_selected["UniqueFileSources"].str.split("|")
         ).explode("UniqueFileSources")
-        filenames_df = df_exploded_files[["DefaultGroups", "UniqueFileSources"]].rename(
+        filenames_df = df_exploded_files[
+            ["DefaultGroups", "UniqueFileSources"]
+        ].rename(
             columns={"DefaultGroups": "group", "UniqueFileSources": "filename"}
         )
         return filenames_df.drop_duplicates().reset_index(drop=True)
@@ -141,7 +147,9 @@ class RDDCounts:
         df_new["sample"] = df_new["filename"].isin(sample_filenames)
 
         # Separate samples and reference based on the sample flag
-        samples_df = df_new[df_new["sample"] == True][["filename", "cluster index"]]
+        samples_df = df_new[df_new["sample"] == True][
+            ["filename", "cluster index"]
+        ]
         RDD_df = df_new[df_new["sample"] == False][
             ["filename", "cluster index"]
         ].rename(columns={"filename": "RDD_filename"})
@@ -163,7 +171,9 @@ class RDDCounts:
         )
 
         RDD_counts_file_level = (
-            merged_df.groupby(["filename", "sample_name"]).size().unstack(fill_value=0)
+            merged_df.groupby(["filename", "sample_name"])
+            .size()
+            .unstack(fill_value=0)
         )
 
         # Return the counts
@@ -222,9 +232,9 @@ class RDDCounts:
                 columns_to_modify = wide_format_counts.columns.difference(
                     ["filename", "water"]
                 )
-                wide_format_counts.loc[:, columns_to_modify] = wide_format_counts.loc[
+                wide_format_counts.loc[
                     :, columns_to_modify
-                ].where(
+                ] = wide_format_counts.loc[:, columns_to_modify].where(
                     wide_format_counts.loc[:, columns_to_modify].gt(
                         water_counts, axis=0
                     ),
@@ -240,7 +250,9 @@ class RDDCounts:
 
             # Melt back to long format
             RDD_counts_level = wide_format_counts.melt(
-                id_vars="filename", var_name="reference_type", value_name="count"
+                id_vars="filename",
+                var_name="reference_type",
+                value_name="count",
             )
             RDD_counts_level["level"] = level
 
@@ -248,7 +260,9 @@ class RDDCounts:
                 RDD_counts_level
             )  # Append to the list instead of concatenating each time
 
-        RDD_counts_all_levels = pd.concat(RDD_counts_all_levels, ignore_index=True)
+        RDD_counts_all_levels = pd.concat(
+            RDD_counts_all_levels, ignore_index=True
+        )
 
         # Map group information from the sample_metadata to the final DataFrame
         RDD_counts_all_levels["group"] = RDD_counts_all_levels["filename"].map(
@@ -256,7 +270,9 @@ class RDDCounts:
         )
 
         # Cast 'count' as an integer
-        RDD_counts_all_levels["count"] = RDD_counts_all_levels["count"].astype(int)
+        RDD_counts_all_levels["count"] = RDD_counts_all_levels["count"].astype(
+            int
+        )
 
         return RDD_counts_all_levels
 
@@ -279,7 +295,7 @@ class RDDCounts:
         pd.DataFrame
             A DataFrame containing the filtered RDD counts with columns: filename,
             reference type, level, count, and group.
-        
+
         Raises
         ------
         ValueError
@@ -333,11 +349,15 @@ class RDDCounts:
             )
 
         # Create a mapping from filename to new group
-        filename_to_group = metadata.set_index("filename")[merge_column].to_dict()
+        filename_to_group = metadata.set_index("filename")[
+            merge_column
+        ].to_dict()
 
         # Update the 'group' column in counts
         self.counts["group"] = (
-            self.counts["filename"].map(filename_to_group).fillna(self.counts["group"])
+            self.counts["filename"]
+            .map(filename_to_group)
+            .fillna(self.counts["group"])
         )
 
         # Update the sample_metadata
@@ -346,13 +366,14 @@ class RDDCounts:
             .map(filename_to_group)
             .fillna(self.sample_metadata["group"])
         )
+
     def generate_RDDflows(
-    self, 
-    max_hierarchy_level: Optional[int] = None, 
-    filename_filter: Optional[str] = None
+        self,
+        max_hierarchy_level: Optional[int] = None,
+        filename_filter: Optional[str] = None,
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Generates RDD flows and processes across ontology levels, with options for 
+        Generates RDD flows and processes across ontology levels, with options for
         filtering by a specific sample and specifying a maximum hierarchy level.
 
         Parameters
@@ -370,7 +391,11 @@ class RDDCounts:
             - processes: DataFrame with unique nodes across the levels.
         """
         # Use provided max_hierarchy_level or default to the instance's levels
-        max_level = max_hierarchy_level if max_hierarchy_level is not None else self.levels
+        max_level = (
+            max_hierarchy_level
+            if max_hierarchy_level is not None
+            else self.levels
+        )
 
         # Filter counts by filename if a filter is specified
         if filename_filter:
@@ -379,7 +404,7 @@ class RDDCounts:
             counts = self.counts
 
         flows = []
-        
+
         for i in range(1, max_level):
             # Set source and target level for the current iteration
             source_level = i
@@ -387,8 +412,8 @@ class RDDCounts:
 
             # Group RDD counts at target level
             target_counts = (
-                counts[counts['level'] == target_level]
-                .groupby('reference_type')['count']
+                counts[counts["level"] == target_level]
+                .groupby("reference_type")["count"]
                 .sum()
                 .reset_index()
             )
@@ -397,12 +422,19 @@ class RDDCounts:
             merged_df = pd.merge(
                 target_counts,
                 self.sample_types,
-                left_on='reference_type',
-                right_on=f"sample_type_group{target_level}"
-            )[[f"sample_type_group{source_level}", 'reference_type', 'count']].drop_duplicates()
+                left_on="reference_type",
+                right_on=f"sample_type_group{target_level}",
+            )[
+                [f"sample_type_group{source_level}", "reference_type", "count"]
+            ].drop_duplicates()
 
             # Rename columns for source-target relationship and add levels for uniqueness
-            flow = merged_df.rename(columns={f"sample_type_group{source_level}": "source", "reference_type": "target"})
+            flow = merged_df.rename(
+                columns={
+                    f"sample_type_group{source_level}": "source",
+                    "reference_type": "target",
+                }
+            )
             flow["source"] = flow["source"] + f"_{source_level}"
             flow["target"] = flow["target"] + f"_{target_level}"
             flow.rename(columns={"count": "value"}, inplace=True)
@@ -413,10 +445,14 @@ class RDDCounts:
         flows_df = pd.concat(flows, ignore_index=True)
 
         # Build processes from unique nodes in flows
-        all_nodes = pd.concat([flows_df["source"], flows_df["target"]]).unique()
-        processes_df = pd.DataFrame({
-            "id": all_nodes,
-            "level": [int(node.split('_')[-1]) for node in all_nodes]
-        }).set_index("id")
+        all_nodes = pd.concat(
+            [flows_df["source"], flows_df["target"]]
+        ).unique()
+        processes_df = pd.DataFrame(
+            {
+                "id": all_nodes,
+                "level": [int(node.split("_")[-1]) for node in all_nodes],
+            }
+        ).set_index("id")
 
         return flows_df, processes_df

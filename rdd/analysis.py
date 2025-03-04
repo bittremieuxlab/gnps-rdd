@@ -67,12 +67,16 @@ def perform_pca_RDD_counts(
     RDD_counts_wide = RDD_counts_to_wide(RDD_counts_filtered, level=level)
 
     # Step 4: Extract numeric columns (reference types) for PCA
-    reference_type_columns = RDD_counts_wide.select_dtypes(include=[np.number]).columns
+    reference_type_columns = RDD_counts_wide.select_dtypes(
+        include=[np.number]
+    ).columns
     features = RDD_counts_wide[reference_type_columns].values
 
     # Step 5: Apply CLR transformation if selected
     if apply_clr:
-        features = clr(features + 1)  # Add 1 to avoid issues with zeros, then apply CLR
+        features = clr(
+            features + 1
+        )  # Add 1 to avoid issues with zeros, then apply CLR
 
     # Step 6: Standardize the data
     features_scaled = StandardScaler().fit_transform(features)
@@ -83,7 +87,9 @@ def perform_pca_RDD_counts(
     explained_variance = pca.explained_variance_ratio_
 
     # Step 8: Create a dataframe with PCA results
-    pca_df = pd.DataFrame(pca_scores, columns=[f"PC{i+1}" for i in range(n_components)])
+    pca_df = pd.DataFrame(
+        pca_scores, columns=[f"PC{i+1}" for i in range(n_components)]
+    )
     pca_df["filename"] = RDD_counts_wide.index
 
     # Merge with sample metadata

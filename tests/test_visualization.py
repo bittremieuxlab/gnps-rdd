@@ -6,7 +6,9 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 import plotly.graph_objects as go
 
-project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "rdd"))
+project_path = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "rdd")
+)
 sys.path.append(project_path)
 
 from RDDcounts import RDDCounts
@@ -284,7 +286,9 @@ def test_plot_sankey_plotly(rdd_counts_instance, tmp_path):
         "descriptor": ["type1", "type2"],
         "color_code": ["#FF5733", "#33FF57"],
     }
-    pd.DataFrame(color_mapping_data).to_csv(color_mapping_path, sep=";", index=False)
+    pd.DataFrame(color_mapping_data).to_csv(
+        color_mapping_path, sep=";", index=False
+    )
 
     # Generate the Sankey plot
     fig = visualizer.plot_sankey(

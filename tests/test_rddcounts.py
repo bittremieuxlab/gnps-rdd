@@ -4,7 +4,9 @@ import pytest
 import pandas as pd
 
 # Add the path to the 'rdd' directory to the system path
-project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "rdd"))
+project_path = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "rdd")
+)
 sys.path.append(project_path)
 
 from RDDcounts import RDDCounts
@@ -104,7 +106,9 @@ def test_filename_level_counts(mock_gnps_and_metadata):
         (None, 1, 2),
     ],
 )
-def test_filter_counts(mock_gnps_and_metadata, reference_types, level, expected_count):
+def test_filter_counts(
+    mock_gnps_and_metadata, reference_types, level, expected_count
+):
     gnps_path, metadata_path = mock_gnps_and_metadata
 
     rdd_counts = RDDCounts(

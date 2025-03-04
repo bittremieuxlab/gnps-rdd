@@ -8,7 +8,9 @@ from typing import List, Optional
 import pandas as pd
 
 
-def _load_RDD_metadata(external_metadata: Optional[str] = None) -> pd.DataFrame:
+def _load_RDD_metadata(
+    external_metadata: Optional[str] = None,
+) -> pd.DataFrame:
     """
     Reads ontology and metadata from the default file or an external file.
 
@@ -33,10 +35,16 @@ def _load_RDD_metadata(external_metadata: Optional[str] = None) -> pd.DataFrame:
     if external_metadata:
         # Load user-provided metadata
         if not external_metadata.lower().endswith((".csv", ".tsv", ".txt")):
-            raise ValueError("External metadata file must be a CSV, TSV, or TXT.")
+            raise ValueError(
+                "External metadata file must be a CSV, TSV, or TXT."
+            )
 
         # Detect separator based on file extension
-        sep = "\t" if external_metadata.lower().endswith((".tsv", ".txt")) else ","
+        sep = (
+            "\t"
+            if external_metadata.lower().endswith((".tsv", ".txt"))
+            else ","
+        )
 
         try:
             return pd.read_csv(external_metadata, sep=sep)
@@ -82,11 +90,17 @@ def _load_sample_types(
             reference_metadata["simple_complex"] == simple_complex
         ]
 
-    col_sample_types = ["sample_name"] + [f"sample_type_group{i}" for i in range(1, 7)]
-    return reference_metadata[["filename", *col_sample_types]].set_index("filename")
+    col_sample_types = ["sample_name"] + [
+        f"sample_type_group{i}" for i in range(1, 7)
+    ]
+    return reference_metadata[["filename", *col_sample_types]].set_index(
+        "filename"
+    )
 
 
-def _validate_groups(gnps_network: pd.DataFrame, groups_included: List[str]) -> None:
+def _validate_groups(
+    gnps_network: pd.DataFrame, groups_included: List[str]
+) -> None:
     """
     Validates that the provided group names exist in the GNPS network data.
 
@@ -112,7 +126,9 @@ def _validate_groups(gnps_network: pd.DataFrame, groups_included: List[str]) -> 
         )
 
 
-def RDD_counts_to_wide(RDD_counts: pd.DataFrame, level: int = None) -> pd.DataFrame:
+def RDD_counts_to_wide(
+    RDD_counts: pd.DataFrame, level: int = None
+) -> pd.DataFrame:
     """
     Convert the RDD counts dataframe from long to wide format for a specific
     ontology level, with 'group' as part of the columns. If the data is already
@@ -147,7 +163,9 @@ def RDD_counts_to_wide(RDD_counts: pd.DataFrame, level: int = None) -> pd.DataFr
             raise ValueError(
                 "Multiple levels found in the data. Please specify a level to convert to wide format."
             )
-        level = levels_in_data[0]  # If the data is already filtered, use that level
+        level = levels_in_data[
+            0
+        ]  # If the data is already filtered, use that level
 
     # Filter the RDD counts dataframe by the specified level, if not already filtered
     filtered_RDD_counts = RDD_counts[RDD_counts["level"] == level]
@@ -157,7 +175,10 @@ def RDD_counts_to_wide(RDD_counts: pd.DataFrame, level: int = None) -> pd.DataFr
 
     # Pivot the filtered dataframe to wide format with 'reference_type' and 'group' as columns
     RDD_counts_wide = filtered_RDD_counts.pivot_table(
-        index="filename", columns="reference_type", values="count", fill_value=0
+        index="filename",
+        columns="reference_type",
+        values="count",
+        fill_value=0,
     )
     group_df = (
         filtered_RDD_counts[["filename", "group"]]
@@ -169,7 +190,9 @@ def RDD_counts_to_wide(RDD_counts: pd.DataFrame, level: int = None) -> pd.DataFr
     return wide_format_RDD_counts
 
 
-def calculate_proportions(RDD_counts: pd.DataFrame, level: int = None) -> pd.DataFrame:
+def calculate_proportions(
+    RDD_counts: pd.DataFrame, level: int = None
+) -> pd.DataFrame:
     """
     Calculate the proportion of each reference type within each sample for a given
     level.
@@ -203,7 +226,9 @@ def calculate_proportions(RDD_counts: pd.DataFrame, level: int = None) -> pd.Dat
             raise ValueError(
                 "Multiple levels found in the data. Please specify a level to calculate proportions."
             )
-        level = levels_in_data[0]  # If the data is already filtered, use that level
+        level = levels_in_data[
+            0
+        ]  # If the data is already filtered, use that level
 
     # Use the existing function to convert to wide format
     df_wide = RDD_counts_to_wide(RDD_counts, level)
