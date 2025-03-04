@@ -124,8 +124,8 @@ def test_RDD_counts_to_wide(rdd_counts_instance):
     # Expected output in wide format
     expected_wide_format = pd.DataFrame(
         {
-            "type1": [5.0, 10.0, 0.0, 0.0],
-            "type2": [0.0, 0.0, 20.0, 25.0],
+            "type1": [5, 10, 0, 0],
+            "type2": [0, 0, 20, 25],
             "group": ["G1", "G1", "G1", "G1"],
         },
         index=[

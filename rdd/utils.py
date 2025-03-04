@@ -180,6 +180,11 @@ def RDD_counts_to_wide(
         values="count",
         fill_value=0,
     )
+
+    # Convert only numerical columns (count values) to int
+    RDD_counts_wide = RDD_counts_wide.apply(
+        lambda col: col.astype(int) if col.dtype == "float64" else col
+    )
     group_df = (
         filtered_RDD_counts[["filename", "group"]]
         .drop_duplicates()
