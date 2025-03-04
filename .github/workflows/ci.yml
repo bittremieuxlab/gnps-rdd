@@ -3,12 +3,11 @@ name: CI - Run Tests and Coverage
 on:
   push:
     branches:
-      - main
-      - develop
+      - structure_change
   pull_request:
     branches:
-      - main
-      - develop
+      - structure_change
+
 
 jobs:
   test:

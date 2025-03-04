@@ -3,10 +3,10 @@ name: Code Style Check
 on:
   push:
     branches:
-      - main
+      - structure_change
   pull_request:
     branches:
-      - main
+      - structure_change
 
 jobs:
   lint:
