@@ -35,4 +35,4 @@ jobs:
 
       # Step 4: Run Black to check formatting
       - name: Run Black
-        run: black --check --diff .
+        run: black --check --diff . --verbose
