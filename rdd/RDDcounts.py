@@ -9,180 +9,49 @@ import numpy as np
 import pandas as pd
 
 # Internal imports
-from utils import _load_RDD_metadata, _load_sample_types, _validate_groups
+from utils import _load_RDD_metadata, _load_sample_types, _validate_groups, get_sample_metadata, normalize_network, split_reference_sample
 
 
 class RDDCounts:
     def __init__(
         self,
-        gnps_network: str,
+        gnps_network_path: str,
         sample_types: str,
-        sample_groups: List[str],
-        reference_groups: List[str],
+        sample_groups: List[str]= None,
+        reference_groups: List[str]=None,
         levels: int = 6,
-        external_metadata: Optional[str] = None,
+        external_reference_metadata: Optional[str] = None,
+        external_sample_metadata: Optional[str] = None,
     ) -> None:
-        """
-        Initializes the RDDCounts object and automatically creates the RDD counts
-        for all levels and all reference types.
-
-        Parameters
-        ----------
-        gnps_network : str
-            Path to the TSV file generated from classical molecular networking.
-        sample_types : str
-            One of 'simple', 'complex', or 'all', indicating which sample types to
-            include in the RDD counts.
-        sample_groups : list of str
-            List of groups representing study spectrum files to include in the
-            analysis.
-        reference_groups : list of str
-            List of groups representing reference spectrum files to include in the
-            analysis.
-        levels : int, optional
-            Number of ontology levels to calculate RDD counts for, by default 6.
-
-        external_metadata : str, optional
-            Path to an external metadata file. If None, the default internal metadata is used.
-
-        Attributes
-        ----------
-        gnps_network : pd.DataFrame
-            Dataframe containing the GNPS network data from the specified TSV file.
-        sample_types : pd.DataFrame
-            Dataframe containing the sample type information, filtered by the
-            specified `sample_types` parameter.
-        sample_groups : list of str
-            List of study group names.
-        reference_groups : list of str
-            List of reference group names.
-        levels : int
-            The number of ontology levels.
-        RDD_metadata : pd.DataFrame
-            Metadata with ontology, including sample names,
-            descriptions, and other attributes.
-        sample_metadata : pd.DataFrame
-            Metadata for the samples, including filenames and group information.
-        counts : pd.DataFrame
-            A DataFrame of the RDD counts across different levels, grouped by
-            filename and sample type.
-        """
-        # Load GNPS network data
-        self.gnps_network = pd.read_csv(gnps_network, sep="\t")
-        self.RDD_metadata = _load_RDD_metadata(
-            external_metadata=external_metadata
-        )
-        self.sample_types = _load_sample_types(self.RDD_metadata, sample_types)
+        
+        self.raw_gnps_network = pd.read_csv(gnps_network_path, sep="\t")
+        self.sample_types = sample_types
         self.sample_groups = sample_groups
         self.reference_groups = reference_groups
         self.levels = levels
-
-        # Validate group names
-        _validate_groups(self.gnps_network, self.sample_groups)
-        _validate_groups(self.gnps_network, self.reference_groups)
-        # Generate sample metadata and counts
-        self.sample_metadata = self._get_sample_metadata()
-        self.file_level_counts = self._get_filename_level_RDD_counts()
+        self.reference_metadata = _load_RDD_metadata(external_reference_metadata)
+        self.sample_metadata = get_sample_metadata(self.raw_gnps_network,sample_groups, external_sample_metadata, filename_col="filename")
+        self.sample_types_df = _load_sample_types(self.reference_metadata,sample_types)
+        self.normalized_network = normalize_network(self.raw_gnps_network,self.sample_groups, self.reference_groups)
+        self.file_level_counts = self.file_counts(self.normalized_network, self.reference_metadata, self.sample_metadata)
         self.counts = self.create_RDD_counts_all_levels()
 
-    def _get_sample_metadata(self) -> pd.DataFrame:
+    def file_counts(self, normalized_gnps_network, reference_metadata, sample_metadata, sample_group_col="group", reference_name_col="sample_name"):
         """
-        Extracts filenames and groups from the study groups (sample_groups) in the
-        GNPS network dataframe.
-
         Returns
         -------
         pd.DataFrame
-            A DataFrame containing filenames and their corresponding groups.
+            A DataFrame containing file-level counts.
         """
-        df_filtered = self.gnps_network[
-            ~self.gnps_network["DefaultGroups"].str.contains(",")
-        ]
-        df_selected = df_filtered[
-            df_filtered["DefaultGroups"].isin(self.sample_groups)
-        ]
-        df_exploded_files = df_selected.assign(
-            UniqueFileSources=df_selected["UniqueFileSources"].str.split("|")
-        ).explode("UniqueFileSources")
-        filenames_df = df_exploded_files[
-            ["DefaultGroups", "UniqueFileSources"]
-        ].rename(
-            columns={"DefaultGroups": "group", "UniqueFileSources": "filename"}
-        )
-        return filenames_df.drop_duplicates().reset_index(drop=True)
-
-    def _get_filename_level_RDD_counts(self) -> pd.DataFrame:
-        """
-        Generates a table of RDD counts at the filename level. It filters the GNPS network
-         based on the provided sample and
-        reference groups.
-        Returns
-        -------
-        pd.DataFrame
-            A DataFrame containing RDD counts at the filename level, structured with
-            columns for 'filename', 'reference_type', 'count', and 'level'.
-        """
-        groups = {f"G{i}" for i in range(1, 7)}
-        groups_excluded = list(
-            groups - set([*self.sample_groups, *self.reference_groups])
-        )
-
-        # Filter GNPS network based on group criteria
-        df_selected = self.gnps_network[
-            (self.gnps_network[self.sample_groups] > 0).all(axis=1)
-            & (self.gnps_network[self.reference_groups] > 0).any(axis=1)
-            & (self.gnps_network[groups_excluded] == 0).all(axis=1)
-        ].copy()
-
-        # Explode the 'UniqueFileSources' to create individual rows for each filename
-        df_exploded = df_selected.assign(
-            filename=df_selected["UniqueFileSources"].str.split("|")
-        ).explode("filename")
-
-        # Create a new dataframe with the necessary columns
-        df_new = df_exploded[["filename", "cluster index"]].copy()
-
-        # Filter for samples and reference using metadata and create separate dataframes
-        sample_filenames = set(self.sample_metadata["filename"])
-        df_new["sample"] = df_new["filename"].isin(sample_filenames)
-
-        # Separate samples and reference based on the sample flag
-        samples_df = df_new[df_new["sample"] == True][
-            ["filename", "cluster index"]
-        ]
-        RDD_df = df_new[df_new["sample"] == False][
-            ["filename", "cluster index"]
-        ].rename(columns={"filename": "RDD_filename"})
-
-        # Reindex RDD dataframe to map refernece types with their corresponding sample names
-        RDD_df["sample_name"] = RDD_df["RDD_filename"].map(
-            self.sample_types["sample_name"]
-        )
-
-        # Filter out rows where 'sample_name' is NaN (in case some reference don't have corresponding sample names)
-        RDD_df = RDD_df.dropna(subset=["sample_name"])
-
-        # Merge samples_df and the updated RDD_df on 'cluster index'
-        merged_df = pd.merge(
-            samples_df,
-            RDD_df[["sample_name", "cluster index"]],
-            on="cluster index",
-            how="inner",
-        )
-
-        RDD_counts_file_level = (
-            merged_df.groupby(["filename", "sample_name"])
-            .size()
-            .unstack(fill_value=0)
-        )
-
-        # Return the counts
-        RDD_counts_file_level_long = RDD_counts_file_level.reset_index().melt(
-            id_vars="filename", var_name="reference_type", value_name="count"
-        )
-        RDD_counts_file_level_long["level"] = 0
-
-        return RDD_counts_file_level_long
+        sample_clusters, reference_clusters = split_reference_sample(normalized_gnps_network, reference_metadata, sample_metadata, sample_group_col, reference_name_col)        
+        shared_clusters = reference_clusters.merge(sample_clusters, on="cluster_index", suffixes=("_reference", "_sample"))
+        cluster_count = shared_clusters.groupby(["filename_sample", reference_name_col]).size().unstack(fill_value=0)
+        cluster_count = cluster_count.drop_duplicates()
+        cluster_count_long = cluster_count.stack().reset_index(name="count")
+        cluster_count_long.rename(columns={reference_name_col: "reference_type", "filename_sample": "filename"}, inplace=True)
+        cluster_count_long["level"] = 0
+        cluster_count_long["group"] = cluster_count_long.merge(self.sample_metadata, on="filename", how="inner")["group"]
+        return cluster_count_long
 
     def create_RDD_counts_all_levels(self) -> pd.DataFrame:
         """
@@ -202,7 +71,7 @@ class RDDCounts:
             RDD_counts_file_level
         ]  # Initialize a list for storing data at all levels
         RDD_counts_file_level_sample_types = RDD_counts_file_level.merge(
-            self.sample_types, left_on="reference_type", right_on="sample_name"
+            self.sample_types_df, left_on="reference_type", right_on="sample_name"
         ).drop_duplicates()
 
         sample_metadata_map = self.sample_metadata.set_index("filename")[

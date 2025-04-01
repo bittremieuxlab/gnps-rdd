@@ -1,6 +1,7 @@
 # Standard library imports
 import os
 import pkg_resources
+import re
 from importlib import resources
 from typing import List, Optional
 
@@ -47,11 +48,13 @@ def _load_RDD_metadata(
         )
 
         try:
-            return pd.read_csv(external_metadata, sep=sep)
+            reference_metadata = pd.read_csv(external_metadata, sep=sep)
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"External metadata file '{external_metadata}' not found."
             )
+        reference_metadata["filename"] = remove_filename_extension(reference_metadata["filename"])
+        return reference_metadata
     else:
         # Default behavior: load internal metadata
         try:
@@ -64,22 +67,13 @@ def _load_RDD_metadata(
                 __name__, "data/foodomics_multiproject_metadata.txt"
             )
             reference_metadata = pd.read_csv(stream, sep="\t")
+        reference_metadata["filename"] = remove_filename_extension(reference_metadata["filename"])
         return reference_metadata
 
 
-def _load_sample_types(
-    reference_metadata: pd.DataFrame, simple_complex: str = "all"
-) -> pd.DataFrame:
+
+def _load_sample_types(reference_metadata: pd.DataFrame, simple_complex: str = "all") -> pd.DataFrame:
     """
-    Filters metadata by simple, complex, or all types of references.
-
-    Parameters
-    ----------
-    reference_metadata : pd.DataFrame
-        The metadata DataFrame to filter.
-    simple_complex : str, optional
-        One of 'simple', 'complex', or 'all'.
-
     Returns
     -------
     pd.DataFrame
@@ -90,12 +84,13 @@ def _load_sample_types(
             reference_metadata["simple_complex"] == simple_complex
         ]
 
-    col_sample_types = ["sample_name"] + [
-        f"sample_type_group{i}" for i in range(1, 7)
+    # Match only columns of the form 'sample_type_groupX' where X is a number
+    sample_type_cols = ["sample_name"] + [
+        col for col in reference_metadata.columns 
+        if re.match(r"sample_type_group\d+$", col)
     ]
-    return reference_metadata[["filename", *col_sample_types]].set_index(
-        "filename"
-    )
+
+    return reference_metadata[["filename", *sample_type_cols]].set_index("filename")
 
 
 def _validate_groups(
@@ -124,7 +119,84 @@ def _validate_groups(
         raise ValueError(
             f"The following groups in groups_included are invalid: {invalid_included_groups}"
         )
+def normalize_network(gnps_network,sample_groups=None, reference_groups=None):
+    
+    if "UniqueFileSources" in gnps_network.columns:
+        groups = {f"G{i}" for i in range(1, 7)}
+        groups_excluded = list(groups - set([*sample_groups, *reference_groups]))
+        df_selected = gnps_network[
+                    (gnps_network[sample_groups] > 0).all(axis=1)
+                    & (gnps_network[reference_groups] > 0).any(axis=1)
+                    & (gnps_network[groups_excluded] == 0).all(axis=1)
+                ].copy()
+        df_exploded = df_selected.assign(
+            filename=df_selected["UniqueFileSources"].str.split("|")
+        ).explode("filename")
 
+        df_normalized = df_exploded[["filename","cluster index"]].drop_duplicates().reset_index(drop=True)
+        df_normalized.rename(columns={"cluster index":"cluster_index"}, inplace=True)
+        df_normalized["filename"] = remove_filename_extension(df_normalized["filename"])
+        return df_normalized
+    else:
+        gnps_network["#Filename"] = gnps_network["#Filename"].str.replace("input_spectra/","")
+        gnps_network.rename(columns={"#Filename":"filename", "#ClusterIdx": "cluster_index"}, inplace=True)
+        df_normalized = gnps_network[["filename", "cluster_index"]].drop_duplicates().reset_index(drop=True)
+        df_normalized["filename"] = remove_filename_extension(df_normalized["filename"])
+        
+        return df_normalized
+
+def get_sample_metadata(raw_gnps_network=None,sample_groups=None, external_sample_metadata=None, filename_col="filename"):
+
+    if external_sample_metadata:
+        sample_metadata = pd.read_csv(external_sample_metadata, sep=",")
+        sample_metadata.rename(columns={filename_col: "filename"}, inplace=True)
+        sample_metadata["filename"] = remove_filename_extension(sample_metadata["filename"])
+        return sample_metadata
+    else:
+        df_filtered = raw_gnps_network[
+            ~raw_gnps_network["DefaultGroups"].str.contains(",")
+        ]
+        df_selected = df_filtered[
+            df_filtered["DefaultGroups"].isin(sample_groups)
+        ]
+        df_exploded_files = df_selected.assign(
+            UniqueFileSources=df_selected["UniqueFileSources"].str.split("|")
+        ).explode("UniqueFileSources")
+        sample_metadata = df_exploded_files[
+            ["DefaultGroups", "UniqueFileSources"]
+        ].rename(
+            columns={"DefaultGroups": "group", "UniqueFileSources": "filename"}
+        )
+        sample_metadata["filename"] = remove_filename_extension(sample_metadata["filename"])
+        return sample_metadata.drop_duplicates().reset_index(drop=True)
+    
+def split_reference_sample(normalized_gnps_network, reference_metadata, sample_metadata, sample_group_col="group", reference_name_col="sample_name"):
+    sample_clusters = pd.merge(normalized_gnps_network,
+        sample_metadata[["filename", sample_group_col]], on="filename", how="inner"
+    ).drop_duplicates().reset_index(drop=True)
+
+    reference_clusters = pd.merge(normalized_gnps_network,
+        reference_metadata[["filename", reference_name_col]], on="filename", how="inner"
+    ).drop_duplicates().reset_index(drop=True)
+
+    return sample_clusters, reference_clusters
+
+def remove_filename_extension(filename_col):
+
+    """
+    Removes the file extension from a filename column in a DataFrame.
+
+    Parameters
+    ----------
+    filename_col : str
+        The name of the column containing filenames.
+
+    Returns
+    -------
+    str
+        The filename without its extension.
+    """
+    return filename_col.str.replace(r"\.[^.]+$", "", regex=True)
 
 def RDD_counts_to_wide(
     RDD_counts: pd.DataFrame, level: int = None

@@ -424,20 +424,22 @@ class MatplotlibBackend(VisualizationBackend):
                 y="proportion",
                 data=data,
                 ax=ax,
-                palette="viridis",
+                hue="reference_type",
+                legend=False,
+                showfliers=False,
                 **kwargs,
             )
             sns.stripplot(
                 x="reference_type",
                 y="proportion",
                 data=data,
-                dodge=True,  # No separation
+                dodge=False,  # No separation
                 jitter=True,
-                palette="viridis",
+                hue="reference_type",
                 ax=ax,
                 marker="o",
                 edgecolor="black",
-                alpha=0.7,
+                alpha=0.3,
                 linewidth=0.6,
                 legend=False,  # Disable legend for stripplot
             )
