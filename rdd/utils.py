@@ -72,23 +72,24 @@ def _load_RDD_metadata(
 
 
 
-def _load_sample_types(reference_metadata: pd.DataFrame, simple_complex: str = "all") -> pd.DataFrame:
-    """
-    Returns
-    -------
-    pd.DataFrame
-        A filtered DataFrame of ontology.
-    """
+def _load_sample_types(reference_metadata: pd.DataFrame, simple_complex: str = "all", ontology_columns: List[str] = None) -> pd.DataFrame:
     if simple_complex != "all":
         reference_metadata = reference_metadata[
             reference_metadata["simple_complex"] == simple_complex
         ]
 
-    # Match only columns of the form 'sample_type_groupX' where X is a number
-    sample_type_cols = ["sample_name"] + [
-        col for col in reference_metadata.columns 
-        if re.match(r"sample_type_group\d+$", col)
-    ]
+    if ontology_columns is None:
+        sample_type_cols = ["sample_name"] + [
+            col for col in reference_metadata.columns 
+            if re.match(r"sample_type_group\d+$", col)
+        ]
+    # Rename ontology columns to include level number (starting from 1)
+    else:
+        renamed_columns = {
+            col: f"{col}{i+1}" for i, col in enumerate(ontology_columns)
+        }
+        df = reference_metadata[["filename", "sample_name", *ontology_columns]].rename(columns=renamed_columns)
+        return df.set_index("filename")
 
     return reference_metadata[["filename", *sample_type_cols]].set_index("filename")
 

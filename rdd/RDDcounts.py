@@ -11,30 +11,49 @@ import pandas as pd
 # Internal imports
 from utils import _load_RDD_metadata, _load_sample_types, _validate_groups, get_sample_metadata, normalize_network, split_reference_sample
 
-
 class RDDCounts:
     def __init__(
         self,
         gnps_network_path: str,
         sample_types: str,
-        sample_groups: List[str]= None,
-        reference_groups: List[str]=None,
+        sample_groups: List[str] = None,
+        reference_groups: List[str] = None,
         levels: int = 6,
         external_reference_metadata: Optional[str] = None,
         external_sample_metadata: Optional[str] = None,
+        ontology_columns: Optional[List[str]] = None,
     ) -> None:
-        
+
         self.raw_gnps_network = pd.read_csv(gnps_network_path, sep="\t")
         self.sample_types = sample_types
         self.sample_groups = sample_groups
         self.reference_groups = reference_groups
         self.levels = levels
+
         self.reference_metadata = _load_RDD_metadata(external_reference_metadata)
-        self.sample_metadata = get_sample_metadata(self.raw_gnps_network,sample_groups, external_sample_metadata, filename_col="filename")
-        self.sample_types_df = _load_sample_types(self.reference_metadata,sample_types)
+        self.sample_metadata = get_sample_metadata(
+            self.raw_gnps_network,
+            sample_groups,
+            external_sample_metadata,
+            filename_col="filename"
+        )
+        if ontology_columns is not None:
+            self.ontology_columns_renamed = [f"{col}{i+1}" for i, col in enumerate(ontology_columns)]
+            self.sample_types_df = _load_sample_types(
+                self.reference_metadata,
+                sample_types,
+                ontology_columns=ontology_columns
+            )
+        else:
+            self.ontology_columns_renamed = None
+            self.sample_types_df = _load_sample_types(
+                self.reference_metadata,
+                sample_types
+            )
         self.normalized_network = normalize_network(self.raw_gnps_network,self.sample_groups, self.reference_groups)
         self.file_level_counts = self.file_counts(self.normalized_network, self.reference_metadata, self.sample_metadata)
         self.counts = self.create_RDD_counts_all_levels()
+       
 
     def file_counts(self, normalized_gnps_network, reference_metadata, sample_metadata, sample_group_col="group", reference_name_col="sample_name"):
         """
@@ -79,45 +98,35 @@ class RDDCounts:
         ].to_dict()  # Create the mapping once
 
         for level in range(1, self.levels + 1):
-            # Group and pivot to wide format
+            if self.ontology_columns_renamed:
+                ontology_col = self.ontology_columns_renamed[level - 1]
+            else:
+                ontology_col = f"sample_type_group{level}"
+
             RDD_counts_level = (
-                RDD_counts_file_level_sample_types.groupby(
-                    ["filename", f"sample_type_group{level}"]
-                )["count"]
+                RDD_counts_file_level_sample_types.groupby(["filename", ontology_col])["count"]
                 .sum()
                 .reset_index()
             )
+
             wide_format_counts = RDD_counts_level.pivot_table(
                 index="filename",
-                columns=f"sample_type_group{level}",
+                columns=ontology_col,
                 values="count",
                 fill_value=0,
             ).reset_index()
 
-            # Compare with water and filter
             if "water" in wide_format_counts.columns:
                 water_counts = wide_format_counts["water"]
-                # Apply the condition across all columns except 'filename' and 'water'
-                columns_to_modify = wide_format_counts.columns.difference(
-                    ["filename", "water"]
-                )
-                wide_format_counts.loc[
-                    :, columns_to_modify
-                ] = wide_format_counts.loc[:, columns_to_modify].where(
-                    wide_format_counts.loc[:, columns_to_modify].gt(
-                        water_counts, axis=0
-                    ),
+                columns_to_modify = wide_format_counts.columns.difference(["filename", "water"])
+                wide_format_counts.loc[:, columns_to_modify] = wide_format_counts.loc[:, columns_to_modify].where(
+                    wide_format_counts.loc[:, columns_to_modify].gt(water_counts, axis=0),
                     0,
                 )
-
                 wide_format_counts = wide_format_counts.drop(columns=["water"])
 
-            # Drop columns where all values are 0
-            wide_format_counts = wide_format_counts.loc[
-                :, (wide_format_counts != 0).any(axis=0)
-            ]
+            wide_format_counts = wide_format_counts.loc[:, (wide_format_counts != 0).any(axis=0)]
 
-            # Melt back to long format
             RDD_counts_level = wide_format_counts.melt(
                 id_vars="filename",
                 var_name="reference_type",
@@ -125,9 +134,8 @@ class RDDCounts:
             )
             RDD_counts_level["level"] = level
 
-            RDD_counts_all_levels.append(
-                RDD_counts_level
-            )  # Append to the list instead of concatenating each time
+            RDD_counts_all_levels.append(RDD_counts_level)
+
 
         RDD_counts_all_levels = pd.concat(
             RDD_counts_all_levels, ignore_index=True
