@@ -7,7 +7,7 @@ from pathlib import Path
 @pytest.fixture
 def mock_network_based_gnps(tmp_path):
     """Fixture for the GNPS file with 'DefaultGroups' and 'UniqueFileSources'."""
-        # Create mock GNPS file
+    # Create mock GNPS file
     data = {
         "DefaultGroups": ["G1", "G4", "G1,G4", "G1,G4", "G1,G4", "G1,G4"],
         "UniqueFileSources": [
@@ -57,13 +57,16 @@ def mock_direct_gnps(tmp_path):
     return path
 
 
-
 @pytest.fixture
 def mock_reference_metadata(tmp_path):
     """Fixture for external reference metadata with ontology columns."""
     df = pd.DataFrame(
         {
-            "filename": ["file_ref1.mzXML", "file_ref2.mzXML", "file_ref3.mzXML"],
+            "filename": [
+                "file_ref1.mzXML",
+                "file_ref2.mzXML",
+                "file_ref3.mzXML",
+            ],
             "ontology_terminal_leaf": ["complex", "plant", "water"],
             "sample_type_group1": ["complex", "plant", "water"],
             "sample_type_group2": ["complex", "fruit", "water"],
@@ -72,21 +75,26 @@ def mock_reference_metadata(tmp_path):
             "sample_type_group5": ["complex", "fruit", "water"],
             "sample_type_group6": ["complex", "fruit", "water"],
             "sample_name": ["complex", "fruit", "water"],
-        })
+        }
+    )
     path = tmp_path / "reference_metadata.csv"
     df.to_csv(path, index=False)
     return path
 
+
 @pytest.fixture
 def mock_sample_metadata(tmp_path):
     """Fixture for external sample metadata."""
-    df = pd.DataFrame({
-        "filename": ["sampleA", "sampleB"],
-        "group": ["G1", "G2"],  # Ensure sample names match those in GNPS
-    })
+    df = pd.DataFrame(
+        {
+            "filename": ["sampleA", "sampleB"],
+            "group": ["G1", "G2"],  # Ensure sample names match those in GNPS
+        }
+    )
     path = tmp_path / "sample_metadata.csv"
     df.to_csv(path, index=False)
     return path
+
 
 @pytest.fixture
 def load_test_files(
@@ -109,6 +117,8 @@ def load_test_files(
                 mock_reference_metadata,
             )
         else:
-            raise ValueError("Unknown fixture type. Use 'network' or 'direct'.")
+            raise ValueError(
+                "Unknown fixture type. Use 'network' or 'direct'."
+            )
 
     return _load

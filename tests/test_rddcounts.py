@@ -2,6 +2,7 @@ import os
 import sys
 import pytest
 import pandas as pd
+
 # Add the path to the 'rdd' directory to the system path
 project_path = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "rdd")
@@ -9,6 +10,7 @@ project_path = os.path.abspath(
 sys.path.append(project_path)
 
 from rdd.RDDcounts import RDDCounts
+
 
 @pytest.mark.parametrize("fixture_type", ["gnps1", "gnps2"])
 def test_rddcounts_initialization(load_test_files, fixture_type):
@@ -18,11 +20,11 @@ def test_rddcounts_initialization(load_test_files, fixture_type):
     if fixture_type == "gnps1":
         sample_groups = ["G1"]
         reference_groups = ["G4"]
-        sample_meta=None
+        sample_meta = None
     else:
         sample_groups = None  # No sample groups for direct format
         reference_groups = None  # No reference groups for direct format
-        sample_meta= str(sample_meta)
+        sample_meta = str(sample_meta)
 
     rdd = RDDCounts(
         gnps_network_path=str(gnps_path),

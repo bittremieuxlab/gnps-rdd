@@ -97,7 +97,7 @@ def rdd_counts_instance(mock_gnps_and_metadata):
         reference_groups=["G4"],
         levels=3,
         external_reference_metadata=str(metadata_path),
-        external_sample_metadata=None,  
+        external_sample_metadata=None,
     )
 
 
