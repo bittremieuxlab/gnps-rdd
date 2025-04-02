@@ -8,7 +8,7 @@ project_path = os.path.abspath(
 )
 sys.path.append(project_path)
 
-from RDDcounts import RDDCounts
+from rdd.RDDcounts import RDDCounts
 
 @pytest.mark.parametrize("fixture_type", ["gnps1", "gnps2"])
 def test_rddcounts_initialization(load_test_files, fixture_type):

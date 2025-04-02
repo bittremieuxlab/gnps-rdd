@@ -8,7 +8,7 @@ project_path = os.path.abspath(
 )
 sys.path.append(project_path)
 
-from utils import (
+from rdd.utils import (
     _load_RDD_metadata,
     _load_sample_types,
     _validate_groups,

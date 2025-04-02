@@ -11,9 +11,9 @@ project_path = os.path.abspath(
 )
 sys.path.append(project_path)
 
-from RDDcounts import RDDCounts
-from visualization import MatplotlibBackend, Visualizer, PlotlyBackend
-from analysis import perform_pca_RDD_counts
+from rdd.RDDcounts import RDDCounts
+from rdd.visualization import MatplotlibBackend, Visualizer, PlotlyBackend
+from rdd.analysis import perform_pca_RDD_counts
 
 
 @pytest.fixture
