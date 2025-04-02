@@ -3,7 +3,7 @@ import os
 import pkg_resources
 import re
 from importlib import resources
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 # Third-party imports
 import pandas as pd
@@ -72,7 +72,7 @@ def _load_RDD_metadata(
 
 
 
-def _load_sample_types(reference_metadata: pd.DataFrame, simple_complex: str = "all", ontology_columns: List[str] = None) -> pd.DataFrame:
+def _load_sample_types(reference_metadata: pd.DataFrame, simple_complex: str = "all", ontology_columns: List[str] = None) -> Tuple[pd.DataFrame, Optional[List[str]]]:
     if simple_complex != "all":
         reference_metadata = reference_metadata[
             reference_metadata["simple_complex"] == simple_complex
@@ -83,15 +83,14 @@ def _load_sample_types(reference_metadata: pd.DataFrame, simple_complex: str = "
             col for col in reference_metadata.columns 
             if re.match(r"sample_type_group\d+$", col)
         ]
-    # Rename ontology columns to include level number (starting from 1)
+        df = reference_metadata[["filename", *sample_type_cols]]
+        return df.set_index("filename"), None
     else:
-        renamed_columns = {
-            col: f"{col}{i+1}" for i, col in enumerate(ontology_columns)
-        }
-        df = reference_metadata[["filename", "sample_name", *ontology_columns]].rename(columns=renamed_columns)
-        return df.set_index("filename")
+        renamed_columns = [f"{col}{i+1}" for i, col in enumerate(ontology_columns)]
+        renamer = dict(zip(ontology_columns, renamed_columns))
 
-    return reference_metadata[["filename", *sample_type_cols]].set_index("filename")
+        df = reference_metadata[["filename", "sample_name", *ontology_columns]].rename(columns=renamer)
+        return df.set_index("filename"), renamed_columns
 
 
 def _validate_groups(

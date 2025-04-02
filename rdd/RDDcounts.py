@@ -37,21 +37,21 @@ class RDDCounts:
             external_sample_metadata,
             filename_col="filename"
         )
-        if ontology_columns is not None:
-            self.ontology_columns_renamed = [f"{col}{i+1}" for i, col in enumerate(ontology_columns)]
-            self.sample_types_df = _load_sample_types(
-                self.reference_metadata,
-                sample_types,
-                ontology_columns=ontology_columns
-            )
-        else:
-            self.ontology_columns_renamed = None
-            self.sample_types_df = _load_sample_types(
-                self.reference_metadata,
-                sample_types
-            )
-        self.normalized_network = normalize_network(self.raw_gnps_network,self.sample_groups, self.reference_groups)
-        self.file_level_counts = self.file_counts(self.normalized_network, self.reference_metadata, self.sample_metadata)
+        self.sample_types_df, self.ontology_columns_renamed = _load_sample_types(
+            self.reference_metadata,
+            sample_types,
+            ontology_columns=ontology_columns
+        )
+        self.normalized_network = normalize_network(
+            self.raw_gnps_network,
+            self.sample_groups,
+            self.reference_groups
+        )
+        self.file_level_counts = self.file_counts(
+            self.normalized_network,
+            self.reference_metadata,
+            self.sample_metadata
+        )
         self.counts = self.create_RDD_counts_all_levels()
        
 
@@ -283,9 +283,16 @@ class RDDCounts:
         flows = []
 
         for i in range(1, max_level):
-            # Set source and target level for the current iteration
             source_level = i
             target_level = i + 1
+
+            # Dynamically determine column names based on renaming
+            if self.ontology_columns_renamed:
+                source_col = self.ontology_columns_renamed[source_level - 1]
+                target_col = self.ontology_columns_renamed[target_level - 1]
+            else:
+                source_col = f"sample_type_group{source_level}"
+                target_col = f"sample_type_group{target_level}"
 
             # Group RDD counts at target level
             target_counts = (
@@ -295,20 +302,18 @@ class RDDCounts:
                 .reset_index()
             )
 
-            # Merge with sample_types to find corresponding source level
+            # Merge with sample types to get source-level info
             merged_df = pd.merge(
                 target_counts,
-                self.sample_types,
+                self.sample_types_df,
                 left_on="reference_type",
-                right_on=f"sample_type_group{target_level}",
-            )[
-                [f"sample_type_group{source_level}", "reference_type", "count"]
-            ].drop_duplicates()
+                right_on=target_col,
+            )[[source_col, "reference_type", "count"]].drop_duplicates()
 
-            # Rename columns for source-target relationship and add levels for uniqueness
+            # Format source-target pairs with levels
             flow = merged_df.rename(
                 columns={
-                    f"sample_type_group{source_level}": "source",
+                    source_col: "source",
                     "reference_type": "target",
                 }
             )
@@ -324,7 +329,7 @@ class RDDCounts:
         # Build processes from unique nodes in flows
         all_nodes = pd.concat(
             [flows_df["source"], flows_df["target"]]
-        ).unique()
+        ).dropna().unique()
         processes_df = pd.DataFrame(
             {
                 "id": all_nodes,
