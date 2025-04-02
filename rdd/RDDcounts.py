@@ -9,9 +9,44 @@ import numpy as np
 import pandas as pd
 
 # Internal imports
-from utils import _load_RDD_metadata, _load_sample_types, _validate_groups, get_sample_metadata, normalize_network, split_reference_sample
+from utils import (
+    _load_RDD_metadata,
+    _load_sample_types,
+    _validate_groups,
+    get_sample_metadata,
+    normalize_network,
+    split_reference_sample,
+)
+
 
 class RDDCounts:
+    """
+    A class for generating Reference Data-Driven (RDD) counts across ontology levels
+    using GNPS molecular networking data and reference metadata.
+
+    Parameters
+    ----------
+    gnps_network_path : str
+        Path to the GNPS network file (.tsv format).
+    sample_types : str
+        Indicates whether to use 'all', 'simple', or 'complex' references.
+    sample_groups : list of str, optional
+        Sample group identifiers to include (e.g., ["G1", "G2"]).
+    reference_groups : list of str, optional
+        Reference group identifiers to include (e.g., ["G3"]).
+    levels : int, optional
+        Number of ontology levels to analyze. Default is 6.
+        If `ontology_columns` is provided, this still sets how many levels are analyzed.
+    external_reference_metadata : str, optional
+        Path to a user-supplied reference metadata file.
+        If None, internal foodomics metadata is used.
+    external_sample_metadata : str, optional
+        Path to a user-supplied sample metadata file. If None, metadata is extracted from GNPS.
+    ontology_columns : list of str, optional
+        Ordered list of ontology column names to use instead of default `sample_type_groupX` columns.
+        These will be renamed internally to `<column_name><level_number>` to support level-based logic.
+    """
+
     def __init__(
         self,
         gnps_network_path: str,
@@ -30,67 +65,156 @@ class RDDCounts:
         self.reference_groups = reference_groups
         self.levels = levels
 
-        self.reference_metadata = _load_RDD_metadata(external_reference_metadata)
+        self.reference_metadata = _load_RDD_metadata(
+            external_reference_metadata
+        )
         self.sample_metadata = get_sample_metadata(
             self.raw_gnps_network,
             sample_groups,
             external_sample_metadata,
-            filename_col="filename"
+            filename_col="filename",
         )
-        self.sample_types_df, self.ontology_columns_renamed = _load_sample_types(
-            self.reference_metadata,
-            sample_types,
-            ontology_columns=ontology_columns
+        self.sample_types_df, self.ontology_columns_renamed = (
+            _load_sample_types(
+                self.reference_metadata,
+                sample_types,
+                ontology_columns=ontology_columns,
+            )
         )
         self.normalized_network = normalize_network(
-            self.raw_gnps_network,
-            self.sample_groups,
-            self.reference_groups
+            self.raw_gnps_network, self.sample_groups, self.reference_groups
         )
         self.file_level_counts = self.file_counts(
             self.normalized_network,
             self.reference_metadata,
-            self.sample_metadata
+            self.sample_metadata,
         )
         self.counts = self.create_RDD_counts_all_levels()
-       
 
-    def file_counts(self, normalized_gnps_network, reference_metadata, sample_metadata, sample_group_col="group", reference_name_col="sample_name"):
+    def _get_ontology_column_for_level(self, level: int) -> str:
         """
+        Retrieves the appropriate ontology column name corresponding to a given level.
+
+        This method returns the renamed ontology column (if custom ontology columns were
+        provided and renamed), or defaults to the standard column format
+        'sample_type_group{level}'.
+
+        Parameters
+        ----------
+        level : int
+            The ontology level for which to retrieve the column name.
+
+        Returns
+        -------
+        str
+            The name of the ontology column corresponding to the specified level.
+        """
+        if self.ontology_columns_renamed:
+            return self.ontology_columns_renamed[level - 1]
+        return f"sample_type_group{level}"
+
+    def file_counts(
+        self,
+        normalized_gnps_network,
+        reference_metadata,
+        sample_metadata,
+        sample_group_col="group",
+        reference_name_col="sample_name",
+    ):
+        """
+        Compute file-level RDD counts by matching sample and reference files to shared molecular clusters.
+
+        This function identifies shared clusters between sample and reference files,
+        counts the number of shared clusters per (filename, reference_type) pair,
+        and returns the data in long format. It assigns level 0 and attaches group labels
+        from the sample metadata.
+
+        Parameters
+        ----------
+        normalized_gnps_network : pd.DataFrame
+            Pre-processed GNPS network in long format with 'filename' and 'cluster_index'.
+        reference_metadata : pd.DataFrame
+            Reference metadata containing at least ['filename', reference_name_col].
+        sample_metadata : pd.DataFrame
+            Sample metadata containing at least ['filename', sample_group_col].
+        sample_group_col : str, optional
+            The column in `sample_metadata` representing sample group identifiers. Default is "group".
+        reference_name_col : str, optional
+            The column in `reference_metadata` that serves as the reference name (e.g., 'sample_name'). Default is "sample_name".
+
         Returns
         -------
         pd.DataFrame
-            A DataFrame containing file-level counts.
+            A long-format DataFrame containing file-level RDD counts with columns:
+            - filename : str
+            - reference_type : str
+            - count : int
+            - level : int (always 0 for file-level)
+            - group : str
         """
-        sample_clusters, reference_clusters = split_reference_sample(normalized_gnps_network, reference_metadata, sample_metadata, sample_group_col, reference_name_col)        
-        shared_clusters = reference_clusters.merge(sample_clusters, on="cluster_index", suffixes=("_reference", "_sample"))
-        cluster_count = shared_clusters.groupby(["filename_sample", reference_name_col]).size().unstack(fill_value=0)
+        sample_clusters, reference_clusters = split_reference_sample(
+            normalized_gnps_network,
+            reference_metadata,
+            sample_metadata,
+            sample_group_col,
+            reference_name_col,
+        )
+        shared_clusters = reference_clusters.merge(
+            sample_clusters,
+            on="cluster_index",
+            suffixes=("_reference", "_sample"),
+        )
+        cluster_count = (
+            shared_clusters.groupby(["filename_sample", reference_name_col])
+            .size()
+            .unstack(fill_value=0)
+        )
         cluster_count = cluster_count.drop_duplicates()
         cluster_count_long = cluster_count.stack().reset_index(name="count")
-        cluster_count_long.rename(columns={reference_name_col: "reference_type", "filename_sample": "filename"}, inplace=True)
+        cluster_count_long.rename(
+            columns={
+                reference_name_col: "reference_type",
+                "filename_sample": "filename",
+            },
+            inplace=True,
+        )
         cluster_count_long["level"] = 0
-        cluster_count_long["group"] = cluster_count_long.merge(self.sample_metadata, on="filename", how="inner")["group"]
+        cluster_count_long["group"] = cluster_count_long.merge(
+            self.sample_metadata, on="filename", how="inner"
+        )["group"]
         return cluster_count_long
 
     def create_RDD_counts_all_levels(self) -> pd.DataFrame:
         """
-        Generates RDD counts across all ontology levels and compiles them into a
-        single DataFrame. This function creates level-specific counts by grouping the
-        file-level counts and applies a filter for samples appearing less frequent than
-        water.Returns the data in long format.
+        Generate RDD counts across all ontology levels, comparing to 'water' and returning filtered results.
+
+        For each ontology level, this function:
+        - Maps `reference_type` entries to their respective ontology groups.
+        - Filters out counts less frequent than 'water'.
+        - Returns a long-format DataFrame with counts for each (filename, reference_type, level).
 
         Returns
         -------
         pd.DataFrame
-            A concatenated DataFrame containing RDD counts across all levels,
-            including 'filename', 'reference_type', 'count', 'level', and 'group' columns.
+            A DataFrame containing RDD counts with the following columns:
+            - filename : str
+            - reference_type : str
+            - count : int
+            - level : int
+            - group : str
         """
         RDD_counts_file_level = self.file_level_counts
         RDD_counts_all_levels = [
             RDD_counts_file_level
         ]  # Initialize a list for storing data at all levels
+        if "reference_type" not in RDD_counts_file_level.columns:
+            raise ValueError(
+                "Expected 'reference_type' column in file-level counts."
+            )
         RDD_counts_file_level_sample_types = RDD_counts_file_level.merge(
-            self.sample_types_df, left_on="reference_type", right_on="sample_name"
+            self.sample_types_df,
+            left_on="reference_type",
+            right_on="sample_name",
         ).drop_duplicates()
 
         sample_metadata_map = self.sample_metadata.set_index("filename")[
@@ -98,13 +222,13 @@ class RDDCounts:
         ].to_dict()  # Create the mapping once
 
         for level in range(1, self.levels + 1):
-            if self.ontology_columns_renamed:
-                ontology_col = self.ontology_columns_renamed[level - 1]
-            else:
-                ontology_col = f"sample_type_group{level}"
+
+            ontology_col = self._get_ontology_column_for_level(level)
 
             RDD_counts_level = (
-                RDD_counts_file_level_sample_types.groupby(["filename", ontology_col])["count"]
+                RDD_counts_file_level_sample_types.groupby(
+                    ["filename", ontology_col]
+                )["count"]
                 .sum()
                 .reset_index()
             )
@@ -118,15 +242,24 @@ class RDDCounts:
 
             if "water" in wide_format_counts.columns:
                 water_counts = wide_format_counts["water"]
-                columns_to_modify = wide_format_counts.columns.difference(["filename", "water"])
-                wide_format_counts.loc[:, columns_to_modify] = wide_format_counts.loc[:, columns_to_modify].where(
-                    wide_format_counts.loc[:, columns_to_modify].gt(water_counts, axis=0),
+                columns_to_modify = wide_format_counts.columns.difference(
+                    ["filename", "water"]
+                )
+                wide_format_counts.loc[
+                    :, columns_to_modify
+                ] = wide_format_counts.loc[:, columns_to_modify].where(
+                    wide_format_counts.loc[:, columns_to_modify].gt(
+                        water_counts, axis=0
+                    ),
                     0,
                 )
                 wide_format_counts = wide_format_counts.drop(columns=["water"])
 
-            wide_format_counts = wide_format_counts.loc[:, (wide_format_counts != 0).any(axis=0)]
-
+            wide_format_counts = wide_format_counts.loc[
+                :, (wide_format_counts != 0).any(axis=0)
+            ]
+            if wide_format_counts.empty:
+                continue  # Skip this level
             RDD_counts_level = wide_format_counts.melt(
                 id_vars="filename",
                 var_name="reference_type",
@@ -135,7 +268,6 @@ class RDDCounts:
             RDD_counts_level["level"] = level
 
             RDD_counts_all_levels.append(RDD_counts_level)
-
 
         RDD_counts_all_levels = pd.concat(
             RDD_counts_all_levels, ignore_index=True
@@ -327,9 +459,11 @@ class RDDCounts:
         flows_df = pd.concat(flows, ignore_index=True)
 
         # Build processes from unique nodes in flows
-        all_nodes = pd.concat(
-            [flows_df["source"], flows_df["target"]]
-        ).dropna().unique()
+        all_nodes = (
+            pd.concat([flows_df["source"], flows_df["target"]])
+            .dropna()
+            .unique()
+        )
         processes_df = pd.DataFrame(
             {
                 "id": all_nodes,

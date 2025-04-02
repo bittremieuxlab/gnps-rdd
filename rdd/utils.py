@@ -13,50 +13,42 @@ def _load_RDD_metadata(
     external_metadata: Optional[str] = None,
 ) -> pd.DataFrame:
     """
-    Reads ontology and metadata from the default file or an external file.
+    Load internal or external reference metadata file containing ontology annotations.
 
     Parameters
     ----------
     external_metadata : str, optional
-        Path to an external metadata file. If provided, this file will be loaded.
-        If None, the default internal metadata will be used.
+        Path to an external metadata file (CSV, TSV, or TXT). If None, internal default metadata is loaded.
 
     Returns
     -------
     pd.DataFrame
-        A DataFrame containing ontology and metadata.
+        Reference metadata DataFrame with a cleaned 'filename' column.
 
     Raises
     ------
     FileNotFoundError
-        If the external file path does not exist.
+        If the specified external file does not exist.
     ValueError
-        If the external file is not in a valid format (must be a CSV/TSV).
+        If the file format is not supported.
     """
     if external_metadata:
-        # Load user-provided metadata
         if not external_metadata.lower().endswith((".csv", ".tsv", ".txt")):
             raise ValueError(
                 "External metadata file must be a CSV, TSV, or TXT."
             )
-
-        # Detect separator based on file extension
         sep = (
             "\t"
             if external_metadata.lower().endswith((".tsv", ".txt"))
             else ","
         )
-
         try:
             reference_metadata = pd.read_csv(external_metadata, sep=sep)
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"External metadata file '{external_metadata}' not found."
             )
-        reference_metadata["filename"] = remove_filename_extension(reference_metadata["filename"])
-        return reference_metadata
     else:
-        # Default behavior: load internal metadata
         try:
             with resources.open_text(
                 "data", "foodomics_multiproject_metadata.txt"
@@ -67,12 +59,38 @@ def _load_RDD_metadata(
                 __name__, "data/foodomics_multiproject_metadata.txt"
             )
             reference_metadata = pd.read_csv(stream, sep="\t")
-        reference_metadata["filename"] = remove_filename_extension(reference_metadata["filename"])
-        return reference_metadata
+
+    # process filename for posterior matching
+    reference_metadata["filename"] = remove_filename_extension(
+        reference_metadata["filename"]
+    )
+    return reference_metadata
 
 
+def _load_sample_types(
+    reference_metadata: pd.DataFrame,
+    simple_complex: str = "all",
+    ontology_columns: Optional[List[str]] = None,
+) -> Tuple[pd.DataFrame, Optional[List[str]]]:
+    """
+    Extract and optionally rename ontology columns from the reference metadata.
 
-def _load_sample_types(reference_metadata: pd.DataFrame, simple_complex: str = "all", ontology_columns: List[str] = None) -> Tuple[pd.DataFrame, Optional[List[str]]]:
+    Parameters
+    ----------
+    reference_metadata : pd.DataFrame
+        Reference metadata containing ontology and sample_type info.
+    simple_complex : str, optional
+        Filter for 'simple', 'complex', or 'all' samples (default is 'all').
+    ontology_columns : list of str, optional
+        Ordered list of ontology columns to be renamed with level suffixes. If None, default ontology structure is used.
+
+    Returns
+    -------
+    Tuple[pd.DataFrame, list of str or None]
+        A tuple containing:
+        - A DataFrame with ontology information (indexed by filename).
+        - A list of renamed ontology column names, or None if defaults were used.
+    """
     if simple_complex != "all":
         reference_metadata = reference_metadata[
             reference_metadata["simple_complex"] == simple_complex
@@ -80,17 +98,20 @@ def _load_sample_types(reference_metadata: pd.DataFrame, simple_complex: str = "
 
     if ontology_columns is None:
         sample_type_cols = ["sample_name"] + [
-            col for col in reference_metadata.columns 
+            col
+            for col in reference_metadata.columns
             if re.match(r"sample_type_group\d+$", col)
         ]
         df = reference_metadata[["filename", *sample_type_cols]]
         return df.set_index("filename"), None
-    else:
-        renamed_columns = [f"{col}{i+1}" for i, col in enumerate(ontology_columns)]
-        renamer = dict(zip(ontology_columns, renamed_columns))
 
-        df = reference_metadata[["filename", "sample_name", *ontology_columns]].rename(columns=renamer)
-        return df.set_index("filename"), renamed_columns
+    # Rename user-defined ontology columns
+    renamed_columns = [f"{col}{i+1}" for i, col in enumerate(ontology_columns)]
+    renamer = dict(zip(ontology_columns, renamed_columns))
+    df = reference_metadata[
+        ["filename", "sample_name", *ontology_columns]
+    ].rename(columns=renamer)
+    return df.set_index("filename"), renamed_columns
 
 
 def _validate_groups(
@@ -119,38 +140,113 @@ def _validate_groups(
         raise ValueError(
             f"The following groups in groups_included are invalid: {invalid_included_groups}"
         )
-def normalize_network(gnps_network,sample_groups=None, reference_groups=None):
-    
-    if "UniqueFileSources" in gnps_network.columns:
+
+
+def normalize_network(gnps_network, sample_groups=None, reference_groups=None):
+    """
+    Normalize the GNPS network to extract unique (filename, cluster_index) pairs.
+
+    Parameters
+    ----------
+    gnps_network : pd.DataFrame
+        Raw GNPS network file.
+    sample_groups : list of str, optional
+        Sample groups to retain.
+    reference_groups : list of str, optional
+        Reference groups to retain.
+
+    Returns
+    -------
+    pd.DataFrame
+        Normalized DataFrame with columns 'filename' and 'cluster_index'.
+    """
+    network = gnps_network.copy()
+
+    if "UniqueFileSources" in network.columns:
         groups = {f"G{i}" for i in range(1, 7)}
-        groups_excluded = list(groups - set([*sample_groups, *reference_groups]))
+        groups_excluded = list(
+            groups - set([*sample_groups, *reference_groups])
+        )
         df_selected = gnps_network[
-                    (gnps_network[sample_groups] > 0).all(axis=1)
-                    & (gnps_network[reference_groups] > 0).any(axis=1)
-                    & (gnps_network[groups_excluded] == 0).all(axis=1)
-                ].copy()
+            (gnps_network[sample_groups] > 0).all(axis=1)
+            & (gnps_network[reference_groups] > 0).any(axis=1)
+            & (gnps_network[groups_excluded] == 0).all(axis=1)
+        ].copy()
         df_exploded = df_selected.assign(
             filename=df_selected["UniqueFileSources"].str.split("|")
         ).explode("filename")
 
-        df_normalized = df_exploded[["filename","cluster index"]].drop_duplicates().reset_index(drop=True)
-        df_normalized.rename(columns={"cluster index":"cluster_index"}, inplace=True)
-        df_normalized["filename"] = remove_filename_extension(df_normalized["filename"])
+        df_normalized = (
+            df_exploded[["filename", "cluster index"]]
+            .drop_duplicates()
+            .reset_index(drop=True)
+        )
+        df_normalized.rename(
+            columns={"cluster index": "cluster_index"}, inplace=True
+        )
+        df_normalized["filename"] = remove_filename_extension(
+            df_normalized["filename"]
+        )
         return df_normalized
     else:
-        gnps_network["#Filename"] = gnps_network["#Filename"].str.replace("input_spectra/","")
-        gnps_network.rename(columns={"#Filename":"filename", "#ClusterIdx": "cluster_index"}, inplace=True)
-        df_normalized = gnps_network[["filename", "cluster_index"]].drop_duplicates().reset_index(drop=True)
-        df_normalized["filename"] = remove_filename_extension(df_normalized["filename"])
-        
+        network["#Filename"] = network["#Filename"].str.replace(
+            "input_spectra/", ""
+        )
+        network.rename(
+            columns={"#Filename": "filename", "#ClusterIdx": "cluster_index"},
+            inplace=True,
+        )
+        df_normalized = (
+            network[["filename", "cluster_index"]]
+            .drop_duplicates()
+            .reset_index(drop=True)
+        )
+        df_normalized["filename"] = remove_filename_extension(
+            df_normalized["filename"]
+        )
+
         return df_normalized
 
-def get_sample_metadata(raw_gnps_network=None,sample_groups=None, external_sample_metadata=None, filename_col="filename"):
+
+def get_sample_metadata(
+    raw_gnps_network=None,
+    sample_groups=None,
+    external_sample_metadata=None,
+    filename_col="filename",
+):
+    """
+    Load sample metadata from an external file or extract it from the GNPS network.
+
+    Parameters
+    ----------
+    raw_gnps_network : pd.DataFrame, optional
+        Raw GNPS network DataFrame, required if no external metadata is provided.
+    sample_groups : list of str, optional
+        List of sample group names to extract from the GNPS network.
+    external_sample_metadata : str, optional
+        Path to an external sample metadata file (CSV).
+    filename_col : str, optional
+        Column name for filenames in the metadata file. Default is "filename".
+
+    Returns
+    -------
+    pd.DataFrame
+        Sample metadata DataFrame with columns 'filename' and 'group'.
+
+    Raises
+    ------
+    ValueError
+        If both raw_gnps_network and external_sample_metadata are None.
+    """
 
     if external_sample_metadata:
         sample_metadata = pd.read_csv(external_sample_metadata, sep=",")
-        sample_metadata.rename(columns={filename_col: "filename"}, inplace=True)
-        sample_metadata["filename"] = remove_filename_extension(sample_metadata["filename"])
+        sample_metadata.rename(
+            columns={filename_col: "filename"}, inplace=True
+        )
+        sample_metadata["filename"] = remove_filename_extension(
+            sample_metadata["filename"]
+        )
         return sample_metadata
     else:
         df_filtered = raw_gnps_network[
@@ -167,22 +263,59 @@ def get_sample_metadata(raw_gnps_network=None,sample_groups=None, external_sampl
         ].rename(
             columns={"DefaultGroups": "group", "UniqueFileSources": "filename"}
         )
-        sample_metadata["filename"] = remove_filename_extension(sample_metadata["filename"])
+        sample_metadata["filename"] = remove_filename_extension(
+            sample_metadata["filename"]
+        )
         return sample_metadata.drop_duplicates().reset_index(drop=True)
-    
-def split_reference_sample(normalized_gnps_network, reference_metadata, sample_metadata, sample_group_col="group", reference_name_col="sample_name"):
-    sample_clusters = pd.merge(normalized_gnps_network,
-        sample_metadata[["filename", sample_group_col]], on="filename", how="inner"
-    ).drop_duplicates().reset_index(drop=True)
 
-    reference_clusters = pd.merge(normalized_gnps_network,
-        reference_metadata[["filename", reference_name_col]], on="filename", how="inner"
-    ).drop_duplicates().reset_index(drop=True)
+
+def split_reference_sample(
+    normalized_gnps_network,
+    reference_metadata,
+    sample_metadata,
+    sample_group_col="group",
+    reference_name_col="sample_name",
+):
+    """
+    Remove file extensions from a pandas Series of filenames.
+
+    Parameters
+    ----------
+    filename_col : pd.Series
+        A Series containing filenames with extensions.
+
+    Returns
+    -------
+    pd.Series
+        A Series with file extensions removed.
+    """
+
+    sample_clusters = (
+        pd.merge(
+            normalized_gnps_network,
+            sample_metadata[["filename", sample_group_col]],
+            on="filename",
+            how="inner",
+        )
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+
+    reference_clusters = (
+        pd.merge(
+            normalized_gnps_network,
+            reference_metadata[["filename", reference_name_col]],
+            on="filename",
+            how="inner",
+        )
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
 
     return sample_clusters, reference_clusters
 
-def remove_filename_extension(filename_col):
 
+def remove_filename_extension(filename_col):
     """
     Removes the file extension from a filename column in a DataFrame.
 
@@ -197,6 +330,7 @@ def remove_filename_extension(filename_col):
         The filename without its extension.
     """
     return filename_col.str.replace(r"\.[^.]+$", "", regex=True)
+
 
 def RDD_counts_to_wide(
     RDD_counts: pd.DataFrame, level: int = None

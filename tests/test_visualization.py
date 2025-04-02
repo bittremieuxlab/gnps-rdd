@@ -91,12 +91,13 @@ def rdd_counts_instance(mock_gnps_and_metadata):
 
     # Create the RDDCounts instance
     return RDDCounts(
-        gnps_network=str(gnps_path),
+        gnps_network_path=str(gnps_path),
         sample_types="all",
         sample_groups=["G1"],
         reference_groups=["G4"],
         levels=3,
-        external_metadata=str(metadata_path),
+        external_reference_metadata=str(metadata_path),
+        external_sample_metadata=None,  
     )
 
 
