@@ -164,6 +164,12 @@ class RDDCounts:
             on="cluster_index",
             suffixes=("_reference", "_sample"),
         )
+        # Remove duplicates to avoid double counting
+        shared_clusters.drop_duplicates(
+            subset=["filename_reference", "filename_sample", "cluster_index"],
+            inplace=True,
+        )
+
         cluster_count = (
             shared_clusters.groupby(["filename_sample", reference_name_col])
             .size()
