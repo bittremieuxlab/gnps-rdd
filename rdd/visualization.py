@@ -496,6 +496,7 @@ class MatplotlibBackend(VisualizationBackend):
         group_by: bool = True,
         group_colors: Optional[dict] = None,
         figsize: Tuple[int, int] = (10, 6),
+        group_column: str = "group",
         **kwargs,
     ):
         """
@@ -517,6 +518,8 @@ class MatplotlibBackend(VisualizationBackend):
             A dictionary mapping group names to colors.
         figsize : tuple of int, optional
             The size of the figure (width, height). Defaults to (10, 6).
+        group_column : str, optional
+            The column name to use for grouping. Defaults to "group".
 
         Returns
         -------
@@ -529,7 +532,7 @@ class MatplotlibBackend(VisualizationBackend):
             sns.scatterplot(
                 x=x_pc,
                 y=y_pc,
-                hue="group",
+                hue=group_column,
                 data=pca_df,
                 palette=group_colors,
                 ax=ax,
@@ -771,6 +774,7 @@ class PlotlyBackend(VisualizationBackend):
         group_by: bool = True,
         group_colors: Optional[dict] = None,
         figsize: Tuple[int, int] = (10, 6),
+        group_column: str = "group",
         **kwargs,
     ):
         """
@@ -792,6 +796,8 @@ class PlotlyBackend(VisualizationBackend):
             A dictionary mapping group names to colors.
         figsize : tuple of int, optional
             Ignored for Plotly but maintained for interface compatibility.
+        group_column : str, optional
+            The column name to use for grouping. Defaults to "group".
 
         Returns
         -------
@@ -801,9 +807,9 @@ class PlotlyBackend(VisualizationBackend):
         fig = go.Figure()
 
         if group_by:
-            groups = pca_df["group"].unique()
+            groups = pca_df[group_column].unique()
             for group in groups:
-                group_data = pca_df[pca_df["group"] == group]
+                group_data = pca_df[pca_df[group_column] == group]
                 fig.add_trace(
                     go.Scatter(
                         x=group_data[x_pc],
@@ -1126,6 +1132,7 @@ class Visualizer:  # pragma: no cover
         group_by: bool = True,
         group_colors: Optional[dict] = None,
         figsize: Tuple[int, int] = (10, 6),
+        group_column: str = "group",
         **kwargs,
     ):
         """
@@ -1147,6 +1154,8 @@ class Visualizer:  # pragma: no cover
             A dictionary mapping group names to colors.
         figsize : tuple of int, optional
             The size of the figure (width, height). Defaults to (10, 6).
+        group_column : str, optional
+            The column name to use for grouping. Defaults to "group".
 
         Returns
         -------
@@ -1161,6 +1170,7 @@ class Visualizer:  # pragma: no cover
             group_by=group_by,
             group_colors=group_colors,
             figsize=figsize,
+            group_column=group_column,
             **kwargs,
         )
 

@@ -34,6 +34,9 @@ class RDDCounts:
         Sample group identifiers to include (e.g., ["G1", "G2"]).
     reference_groups : list of str, optional
         Reference group identifiers to include (e.g., ["G3"]).
+    sample_group_col : str
+        The column in the sample metadata representing sample group identifiers.
+        Default is "group".
     levels : int, optional
         Number of ontology levels to analyze. Default is 6.
         If `ontology_columns` is provided, this still sets how many levels are analyzed.
@@ -53,6 +56,7 @@ class RDDCounts:
         sample_types: str,
         sample_groups: List[str] = None,
         reference_groups: List[str] = None,
+        sample_group_col: str = "group",
         levels: int = 6,
         external_reference_metadata: Optional[str] = None,
         external_sample_metadata: Optional[str] = None,
@@ -64,6 +68,7 @@ class RDDCounts:
         self.sample_groups = sample_groups
         self.reference_groups = reference_groups
         self.levels = levels
+        self.sample_group_col = sample_group_col
 
         self.reference_metadata = _load_RDD_metadata(
             external_reference_metadata
@@ -118,7 +123,6 @@ class RDDCounts:
         normalized_gnps_network,
         reference_metadata,
         sample_metadata,
-        sample_group_col="group",
         reference_name_col="sample_name",
     ):
         """
@@ -137,7 +141,6 @@ class RDDCounts:
             Reference metadata containing at least ['filename', reference_name_col].
         sample_metadata : pd.DataFrame
             Sample metadata containing at least ['filename', sample_group_col].
-        sample_group_col : str, optional
             The column in `sample_metadata` representing sample group identifiers. Default is "group".
         reference_name_col : str, optional
             The column in `reference_metadata` that serves as the reference name (e.g., 'sample_name'). Default is "sample_name".
@@ -152,12 +155,20 @@ class RDDCounts:
             - level : int (always 0 for file-level)
             - group : str
         """
+
         sample_clusters, reference_clusters = split_reference_sample(
             normalized_gnps_network,
             reference_metadata,
             sample_metadata,
-            sample_group_col,
-            reference_name_col,
+            sample_group_col=self.sample_group_col,
+            reference_name_col=reference_name_col,
+        )
+        sample_clusters.drop_duplicates(
+            subset=["filename", "cluster_index"], inplace=True
+        )
+        reference_clusters.drop_duplicates(
+            subset=["filename", reference_name_col, "cluster_index"],
+            inplace=True,
         )
         shared_clusters = reference_clusters.merge(
             sample_clusters,
@@ -187,7 +198,7 @@ class RDDCounts:
         cluster_count_long["level"] = 0
         cluster_count_long["group"] = cluster_count_long.merge(
             self.sample_metadata, on="filename", how="inner"
-        )["group"]
+        )[self.sample_group_col]
         return cluster_count_long
 
     def create_RDD_counts_all_levels(self) -> pd.DataFrame:
@@ -224,7 +235,7 @@ class RDDCounts:
         ).drop_duplicates()
 
         sample_metadata_map = self.sample_metadata.set_index("filename")[
-            "group"
+            self.sample_group_col
         ].to_dict()  # Create the mapping once
 
         for level in range(1, self.levels + 1):

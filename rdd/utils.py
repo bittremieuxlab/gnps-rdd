@@ -277,17 +277,33 @@ def split_reference_sample(
     reference_name_col="sample_name",
 ):
     """
-    Remove file extensions from a pandas Series of filenames.
+    Splits a normalized GNPS network DataFrame into reference and sample subsets
+    by matching filenames in `reference_metadata` and `sample_metadata`.
 
     Parameters
     ----------
-    filename_col : pd.Series
-        A Series containing filenames with extensions.
+    normalized_gnps_network : pd.DataFrame
+        A normalized GNPS network DataFrame
+    reference_metadata : pd.DataFrame
+        A DataFrame containing reference filenames (and other metadata).
+        Must include columns like ['filename', reference_name_col].
+    sample_metadata : pd.DataFrame
+        A DataFrame containing sample filenames (and other metadata).
+        Must include columns like ['filename', sample_group_col].
+    sample_group_col : str, optional
+        The column name in `sample_metadata` indicating sample group,
+        by default 'group'.
+    reference_name_col : str, optional
+        The column name in `reference_metadata` indicating reference name or ID,
+        by default 'sample_name'.
 
     Returns
     -------
-    pd.Series
-        A Series with file extensions removed.
+    (pd.DataFrame, pd.DataFrame)
+        A tuple of (sample_df, reference_df) DataFrames, each a subset of
+        the noramlized gnps network. The first contains rows whose filenames match
+        those in the sample metadata, and the second contains rows whose filenames
+        match those in the reference metadata.
     """
 
     sample_clusters = (
