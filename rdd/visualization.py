@@ -370,8 +370,10 @@ class MatplotlibBackend(VisualizationBackend):
                 x="reference_type",
                 y="count",
                 data=data,
+                hue="reference_type",
                 palette="viridis",
                 ax=ax,
+                legend=False,
             )
 
         ax.set_title("reference type Distribution")
@@ -389,6 +391,7 @@ class MatplotlibBackend(VisualizationBackend):
         figsize: Tuple[int, int] = (10, 6),
         **kwargs,
     ):
+
         fig, ax = plt.subplots(figsize=figsize)
 
         if group_by:
@@ -400,6 +403,7 @@ class MatplotlibBackend(VisualizationBackend):
                 data=data,
                 ax=ax,
                 palette=group_colors,
+                orient="v",
                 **kwargs,
             )
             sns.stripplot(
@@ -427,6 +431,7 @@ class MatplotlibBackend(VisualizationBackend):
                 hue="reference_type",
                 legend=False,
                 showfliers=False,
+                orient="v",
                 **kwargs,
             )
             sns.stripplot(
