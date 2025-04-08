@@ -240,7 +240,24 @@ def get_sample_metadata(
     """
 
     if external_sample_metadata:
-        sample_metadata = pd.read_csv(external_sample_metadata, sep=",")
+
+        if not external_sample_metadata.lower().endswith(
+            (".csv", ".tsv", ".txt")
+        ):
+            raise ValueError(
+                "External metadata file must be a CSV, TSV, or TXT."
+            )
+        sep = (
+            "\t"
+            if external_sample_metadata.lower().endswith((".tsv", ".txt"))
+            else ","
+        )
+        try:
+            sample_metadata = pd.read_csv(external_sample_metadata, sep=sep)
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                f"External metadata file '{external_sample_metadata}' not found."
+            )
         sample_metadata.rename(
             columns={filename_col: "filename"}, inplace=True
         )
