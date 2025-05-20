@@ -11,8 +11,8 @@ from sklearn.preprocessing import StandardScaler
 from skbio.stats.composition import clr
 
 # Internal imports
-from RDDcounts import RDDCounts
-from utils import RDD_counts_to_wide
+from .RDDcounts import RDDCounts
+from .utils import RDD_counts_to_wide
 
 
 def perform_pca_RDD_counts(

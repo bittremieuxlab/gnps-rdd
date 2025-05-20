@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 # Internal imports
-from utils import (
+from .utils import (
     _load_RDD_metadata,
     _load_sample_types,
     _validate_groups,
@@ -303,42 +303,50 @@ class RDDCounts:
         return RDD_counts_all_levels
 
     def filter_counts(
-        self, reference_types: Optional[List[str]] = None, level: int = 3
+        self,
+        reference_types: Optional[List[str]] = None,
+        level: int = 3,
+        sample_names: Optional[List[str]] = None,
     ) -> pd.DataFrame:
         """
-        Filters the RDD counts based on reference types and ontology level.
+        Filters the RDD counts based on reference types, ontology level, and selected sample name.
 
         Parameters
         ----------
         reference_types : list of str, optional
             List of reference types to filter by. If None, all reference types at the specified
-            level are included. Defaults to None.
+            level are included.
         level : int, optional
             The ontology level to filter the RDD counts by. Defaults to 3.
+        sample_names : list of str, optional
+            The sample name or names (e.g., filename) to filter by. If None, all samples are included.
 
         Returns
         -------
         pd.DataFrame
             A DataFrame containing the filtered RDD counts with columns: filename,
-            reference type, level, count, and group.
+            reference_type, level, count, and group.
 
         Raises
         ------
         ValueError
-            If the  RDD counts have not been yet created
+            If the RDD counts have not yet been created.
         """
         if self.counts is None:
             raise ValueError(
                 "RDD counts have not been created yet. Call create() first."
             )
-        if reference_types is None:
-            filtered_df = self.counts[self.counts["level"] == level]
-            return filtered_df
-        filtered_df = self.counts[
-            (self.counts["reference_type"].isin(reference_types))
-            & (self.counts["level"] == level)
-        ]
+
+        filtered_df = self.counts[self.counts["level"] == level]
+
+        if reference_types is not None:
+            filtered_df = filtered_df[filtered_df["reference_type"].isin(reference_types)]
+
+        if sample_names is not None:
+            filtered_df = filtered_df[filtered_df["filename"].isin(sample_names)]
+
         return filtered_df
+
 
     def update_groups(self, metadata_file: str, merge_column: str) -> None:
         """

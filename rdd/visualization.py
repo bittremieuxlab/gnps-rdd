@@ -16,8 +16,8 @@ import plotly.graph_objects as go
 
 
 # Internal imports
-from RDDcounts import RDDCounts
-from utils import RDD_counts_to_wide, calculate_proportions
+from .RDDcounts import RDDCounts
+from .utils import RDD_counts_to_wide, calculate_proportions
 
 
 def sort_nodes_by_flow(flows_df, processes_df):
