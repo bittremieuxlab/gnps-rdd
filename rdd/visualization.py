@@ -201,9 +201,12 @@ def filter_and_group_RDD_counts(
     level: int,
     reference_types: Optional[List[str]] = None,
     group_by: bool = False,
+    sample_names: Optional[Union[str, List[str]]] = None,
+    top_n: Optional[int] = None,
+    top_n_method: str = "per_sample",
 ) -> pd.DataFrame:
     """
-    Filter and group the RDD counts data by ontology level and reference types.
+    Filter and group the RDD counts data by ontology level, reference types, and optional parameters.
 
     Parameters
     ----------
@@ -212,32 +215,32 @@ def filter_and_group_RDD_counts(
     level : int
         The ontology level to filter by.
     reference_types : list of str, optional
-        Specific reference types to include in the filtered data. If None, all reference types
-        are included. Defaults to None.
+        Specific reference types to include in the filtered data.
     group_by : bool, optional
-        Whether to group the data by the 'group' column. Defaults to False.
+        Whether to group the data by the 'group' column.
+    sample_names : str or list of str, optional
+        Filter by specific sample name(s).
+    top_n : int, optional
+        Select the top N reference types.
+    top_n_method : str, optional
+        Method to select top N types: 'per_sample', 'total', or 'average'.
 
     Returns
     -------
     pd.DataFrame
         The filtered and grouped RDD counts data.
-
-    Raises
-    ------
-    ValueError
-        If no data is available for the specified level and reference types.
     """
-    # Filter the data
     filtered_counts = RDD_counts_instance.filter_counts(
-        reference_types=reference_types, level=level
+        reference_types=reference_types,
+        level=level,
+        sample_names=sample_names,
+        top_n=top_n,
+        top_n_method=top_n_method,
     )
 
     if filtered_counts.empty:
-        raise ValueError(
-            "No data available for the specified level and reference types."
-        )
+        raise ValueError("No data available for the specified filters.")
 
-    # Group the data
     if group_by:
         data = (
             filtered_counts.groupby(["reference_type", "group"])["count"]
@@ -258,6 +261,9 @@ def prepare_boxplot_data(
     RDD_counts_instance: "RDDCounts",
     level: int,
     reference_types: Optional[List[str]] = None,
+    sample_names: Optional[Union[str, List[str]]] = None,
+    top_n: Optional[int] = None,
+    top_n_method: str = "per_sample",
 ) -> pd.DataFrame:
     """
     Prepare the RDD proportions data for box plotting.
@@ -270,20 +276,34 @@ def prepare_boxplot_data(
         The ontology level to filter by.
     reference_types : list of str, optional
         Specific reference types to include. If None, all reference types are included.
+    sample_names : str or list of str, optional
+        Filter by specific sample name(s).
+    top_n : int, optional
+        Select the top N reference types based on the method.
+    top_n_method : str, optional
+        Method to select top N reference types: 'per_sample', 'total', 'average'.
 
     Returns
     -------
     pd.DataFrame
         A long-format DataFrame with columns 'reference_type', 'group', and 'proportion'.
-
-    Raises
-    ------
-    ValueError
-        If no reference types are provided or if the filtered data is empty.
     """
-    # Access counts and calculate proportions
-    counts = RDD_counts_instance.counts
-    df_proportions = calculate_proportions(counts, level=level)
+    # Filter counts with updated options
+    filtered_df = RDD_counts_instance.filter_counts(
+        reference_types=reference_types,
+        level=level,
+        sample_names=sample_names,
+        top_n=top_n,
+        top_n_method=top_n_method,
+    )
+
+    if filtered_df.empty:
+        raise ValueError(
+            "No data available for the specified filtering options."
+        )
+
+    # Calculate proportions
+    df_proportions = calculate_proportions(filtered_df, level=level)
 
     # Convert to long format
     df_long = df_proportions.reset_index().melt(
@@ -291,15 +311,6 @@ def prepare_boxplot_data(
         var_name="reference_type",
         value_name="proportion",
     )
-
-    # Filter by reference types
-    if reference_types:
-        df_long = df_long[df_long["reference_type"].isin(reference_types)]
-
-    if df_long.empty:
-        raise ValueError(
-            "No data available for the specified reference types."
-        )
 
     return df_long
 
@@ -1009,6 +1020,9 @@ class Visualizer:  # pragma: no cover
         level: int = 3,
         reference_types: Optional[List[str]] = None,
         group_by: bool = False,
+        sample_names: Optional[Union[str, List[str]]] = None,
+        top_n: Optional[int] = None,
+        top_n_method: str = "per_sample",
         figsize: Tuple[int, int] = (10, 6),
         **kwargs,
     ):
@@ -1019,27 +1033,36 @@ class Visualizer:  # pragma: no cover
         ----------
         RDD_counts_instance : RDDCounts
             An instance of the RDDCounts class containing the RDD counts data.
-        level : int, optional
-            The ontology level to filter by. Defaults to 3.
+        level : int
+            The ontology level to filter by.
         reference_types : list of str, optional
-            Specific reference types to include in the plot. If None, all reference types
-            are included. Defaults to None.
+            Specific reference types to include in the plot.
         group_by : bool, optional
-            Whether to group by the 'group' column in the plot. Defaults to False.
-        figsize : tuple of int, optional
-            The size of the figure (width, height). Defaults to (10, 6).
+            Whether to group by the 'group' column in the plot.
+        sample_names : str or list of str, optional
+            Filter by specific sample name(s).
+        top_n : int, optional
+            Select the top N reference types.
+        top_n_method : str, optional
+            Method to select top N reference types.
+        figsize : tuple, optional
+            Size of the plot figure.
 
         Returns
         -------
-        matplotlib.figure.Figure or plotly.graph_objects.Figure
-            The rendered figure object.
+        Figure
+            The rendered figure.
         """
-        # Filter and group the data
         data = filter_and_group_RDD_counts(
-            RDD_counts_instance, level, reference_types, group_by
+            RDD_counts_instance=RDD_counts_instance,
+            level=level,
+            reference_types=reference_types,
+            group_by=group_by,
+            sample_names=sample_names,
+            top_n=top_n,
+            top_n_method=top_n_method,
         )
 
-        # Render using the backend
         return self.backend.plot_reference_type_distribution(
             data, group_by=group_by, figsize=figsize, **kwargs
         )
@@ -1052,6 +1075,9 @@ class Visualizer:  # pragma: no cover
         group_by: bool = False,
         group_colors: Optional[dict] = None,
         figsize: Tuple[int, int] = (10, 6),
+        sample_names: Optional[Union[str, List[str]]] = None,
+        top_n: Optional[int] = None,
+        top_n_method: str = "per_sample",
         **kwargs,
     ):
         """
@@ -1071,18 +1097,27 @@ class Visualizer:  # pragma: no cover
             A dictionary mapping group names to colors. Defaults to None.
         figsize : tuple of int, optional
             The size of the figure (width, height). Defaults to (10, 6).
+        sample_names : str or list of str, optional
+            Filter by specific sample name(s).
+        top_n : int, optional
+            Select top N reference types.
+        top_n_method : str, optional
+            Selection method: 'per_sample', 'total', or 'average'.
 
         Returns
         -------
         matplotlib.figure.Figure or plotly.graph_objects.Figure
             The rendered figure object.
         """
-        # Prepare data
         data = prepare_boxplot_data(
-            RDD_counts_instance, level, reference_types
+            RDD_counts_instance=RDD_counts_instance,
+            level=level,
+            reference_types=reference_types,
+            sample_names=sample_names,
+            top_n=top_n,
+            top_n_method=top_n_method,
         )
 
-        # Render using the backend
         return self.backend.box_plot_RDD_proportions(
             data,
             group_by=group_by,

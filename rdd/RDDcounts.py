@@ -2,7 +2,7 @@
 
 # Standard library imports
 import os
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 # Third-party imports
 import numpy as np
@@ -61,6 +61,7 @@ class RDDCounts:
         external_reference_metadata: Optional[str] = None,
         external_sample_metadata: Optional[str] = None,
         ontology_columns: Optional[List[str]] = None,
+        blank_identifier: str = "water",
     ) -> None:
 
         self.raw_gnps_network = pd.read_csv(gnps_network_path, sep="\t")
@@ -69,6 +70,7 @@ class RDDCounts:
         self.reference_groups = reference_groups
         self.levels = levels
         self.sample_group_col = sample_group_col
+        self.blank_identifier = blank_identifier
 
         self.reference_metadata = _load_RDD_metadata(
             external_reference_metadata
@@ -257,10 +259,10 @@ class RDDCounts:
                 fill_value=0,
             ).reset_index()
 
-            if "water" in wide_format_counts.columns:
-                water_counts = wide_format_counts["water"]
+            if self.blank_identifier in wide_format_counts.columns:
+                water_counts = wide_format_counts[self.blank_identifier]
                 columns_to_modify = wide_format_counts.columns.difference(
-                    ["filename", "water"]
+                    ["filename", self.blank_identifier]
                 )
                 wide_format_counts.loc[
                     :, columns_to_modify
@@ -270,7 +272,9 @@ class RDDCounts:
                     ),
                     0,
                 )
-                wide_format_counts = wide_format_counts.drop(columns=["water"])
+                wide_format_counts = wide_format_counts.drop(
+                    columns=[self.blank_identifier]
+                )
 
             wide_format_counts = wide_format_counts.loc[
                 :, (wide_format_counts != 0).any(axis=0)
@@ -306,47 +310,108 @@ class RDDCounts:
         self,
         reference_types: Optional[List[str]] = None,
         level: int = 3,
-        sample_names: Optional[List[str]] = None,
+        sample_names: Optional[Union[str, List[str]]] = None,
+        group: Optional[Union[str, List[str]]] = None,
+        top_n: Optional[int] = None,
+        top_n_method: str = "per_sample",
     ) -> pd.DataFrame:
         """
-        Filters the RDD counts based on reference types, ontology level, and selected sample name.
+        Filters the RDD counts by reference types, ontology level, sample names, groups,
+        and optionally by top N types.
 
         Parameters
         ----------
         reference_types : list of str, optional
-            List of reference types to filter by. If None, all reference types at the specified
-            level are included.
+            List of reference types to filter by.
         level : int, optional
-            The ontology level to filter the RDD counts by. Defaults to 3.
-        sample_names : list of str, optional
-            The sample name or names (e.g., filename) to filter by. If None, all samples are included.
+            Ontology level to filter by. Defaults to 3.
+        sample_names : str or list of str, optional
+            Filter by specific sample name(s).
+        group : str or list of str, optional
+            Filter by specific sample group(s).
+        top_n : int, optional
+            Select the top N reference types based on the method defined in `top_n_method`.
+        top_n_method : str, optional
+            Method to select top N reference types. Options:
+            - 'per_sample': Top N per sample (union across samples)
+            - 'total': Top N by total counts across all samples
+            - 'average': Top N by mean count per sample
 
         Returns
         -------
         pd.DataFrame
-            A DataFrame containing the filtered RDD counts with columns: filename,
-            reference_type, level, count, and group.
-
-        Raises
-        ------
-        ValueError
-            If the RDD counts have not yet been created.
+            Filtered RDD counts dataframe.
         """
         if self.counts is None:
             raise ValueError(
                 "RDD counts have not been created yet. Call create() first."
             )
 
+        # Filter by ontology level
         filtered_df = self.counts[self.counts["level"] == level]
 
-        if reference_types is not None:
-            filtered_df = filtered_df[filtered_df["reference_type"].isin(reference_types)]
+        # Filter by sample name(s)
+        if sample_names:
+            if isinstance(sample_names, str):
+                sample_names = [sample_names]
+            filtered_df = filtered_df[
+                filtered_df["filename"].isin(sample_names)
+            ]
 
-        if sample_names is not None:
-            filtered_df = filtered_df[filtered_df["filename"].isin(sample_names)]
+        # Filter by group(s)
+        if group is not None:
+            if isinstance(group, str):
+                group = [group]
+            filtered_df = filtered_df[filtered_df["group"].isin(group)]
+
+        # Select top N reference types if requested
+        if top_n is not None:
+            if top_n_method == "per_sample":
+                top_df = (
+                    filtered_df.groupby("filename")
+                    .apply(
+                        lambda df: df.nlargest(top_n, "count")[
+                            ["reference_type"]
+                        ]
+                    )
+                    .reset_index(drop=True)
+                )
+                top_reference_types = (
+                    top_df["reference_type"].dropna().unique().tolist()
+                )
+
+            elif top_n_method == "total":
+                top_reference_types = (
+                    filtered_df.groupby("reference_type")["count"]
+                    .sum()
+                    .nlargest(top_n)
+                    .index.tolist()
+                )
+
+            elif top_n_method == "average":
+                top_reference_types = (
+                    filtered_df.groupby("reference_type")["count"]
+                    .mean()
+                    .nlargest(top_n)
+                    .index.tolist()
+                )
+
+            else:
+                raise ValueError(
+                    "Invalid top_n_method. Choose from 'per_sample', 'total', or 'average'."
+                )
+
+            filtered_df = filtered_df[
+                filtered_df["reference_type"].isin(top_reference_types)
+            ]
+
+        # Filter again by explicitly provided reference_types
+        if reference_types is not None:
+            filtered_df = filtered_df[
+                filtered_df["reference_type"].isin(reference_types)
+            ]
 
         return filtered_df
-
 
     def update_groups(self, metadata_file: str, merge_column: str) -> None:
         """
