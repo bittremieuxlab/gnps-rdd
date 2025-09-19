@@ -88,6 +88,8 @@ class RDDCounts:
                 ontology_columns=ontology_columns,
             )
         )
+
+        self.ontology_table = self.sample_types_df.copy().drop(columns=["sample_name"]).drop_duplicates()
         self.normalized_network = normalize_network(
             self.raw_gnps_network, self.sample_groups, self.reference_groups
         )
@@ -182,6 +184,8 @@ class RDDCounts:
             subset=["filename_reference", "filename_sample", "cluster_index"],
             inplace=True,
         )
+
+        self.shared_clusters = shared_clusters
 
         cluster_count = (
             shared_clusters.groupby(["filename_sample", reference_name_col])
@@ -314,6 +318,9 @@ class RDDCounts:
         group: Optional[Union[str, List[str]]] = None,
         top_n: Optional[int] = None,
         top_n_method: str = "per_sample",
+        upper_level: Optional[int] = None,
+        lower_level: Optional[int] = None,
+        upper_level_reference_types: Optional[List[str]] = None,
     ) -> pd.DataFrame:
         """
         Filters the RDD counts by reference types, ontology level, sample names, groups,
@@ -346,6 +353,31 @@ class RDDCounts:
             raise ValueError(
                 "RDD counts have not been created yet. Call create() first."
             )
+        
+        if upper_level is not None and lower_level is not None:
+            if upper_level >= lower_level:
+                raise ValueError("upper_level must be lower than lower_level.")
+
+            if upper_level_reference_types is None:
+                raise ValueError("Must provide upper_level_reference_types when using upper_level filtering.")
+
+            # Get column names from level indices (assuming ontology_columns_renamed is ordered by level)
+            upper_ontology_col = self.ontology_columns_renamed[upper_level - 1]
+            lower_ontology_col = self.ontology_columns_renamed[lower_level - 1]
+
+            # Matching lower-level reference types
+            reference_types = (
+                self.ontology_table[
+                    self.ontology_table[upper_ontology_col].isin(upper_level_reference_types)
+                ][lower_ontology_col]
+                .dropna()
+                .unique()
+                .tolist()
+            )
+
+            # Override level to lower_level for filtering
+            level = lower_level
+            
 
         # Filter by ontology level
         filtered_df = self.counts[self.counts["level"] == level]

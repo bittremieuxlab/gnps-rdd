@@ -168,8 +168,8 @@ def normalize_network(gnps_network, sample_groups=None, reference_groups=None):
             groups - set([*sample_groups, *reference_groups])
         )
         df_selected = gnps_network[
-            (gnps_network[sample_groups] > 0).all(axis=1)
-            & (gnps_network[reference_groups] > 0).any(axis=1)
+            (gnps_network[sample_groups] > 0).any(axis=1)
+            | (gnps_network[reference_groups] > 0).any(axis=1)
             & (gnps_network[groups_excluded] == 0).all(axis=1)
         ].copy()
         df_exploded = df_selected.assign(

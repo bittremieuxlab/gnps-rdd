@@ -204,6 +204,10 @@ def filter_and_group_RDD_counts(
     sample_names: Optional[Union[str, List[str]]] = None,
     top_n: Optional[int] = None,
     top_n_method: str = "per_sample",
+    group: Optional[Union[str, List[str]]] = None,
+    upper_level: Optional[int] = None,
+    lower_level: Optional[int] = None,
+    upper_level_reference_types: Optional[List[str]] = None
 ) -> pd.DataFrame:
     """
     Filter and group the RDD counts data by ontology level, reference types, and optional parameters.
@@ -236,6 +240,10 @@ def filter_and_group_RDD_counts(
         sample_names=sample_names,
         top_n=top_n,
         top_n_method=top_n_method,
+        group=group,
+        upper_level=upper_level,
+        lower_level=lower_level,
+        upper_level_reference_types=upper_level_reference_types,
     )
 
     if filtered_counts.empty:
@@ -264,53 +272,53 @@ def prepare_boxplot_data(
     sample_names: Optional[Union[str, List[str]]] = None,
     top_n: Optional[int] = None,
     top_n_method: str = "per_sample",
+    group: Optional[Union[str, List[str]]] = None,
+    upper_level: Optional[int] = None,
+    lower_level: Optional[int] = None,
+    upper_level_reference_types: Optional[List[str]] = None
 ) -> pd.DataFrame:
     """
     Prepare the RDD proportions data for box plotting.
-
-    Parameters
-    ----------
-    RDD_counts_instance : RDDCounts
-        An instance of the RDDCounts class containing the RDD counts data.
-    level : int
-        The ontology level to filter by.
-    reference_types : list of str, optional
-        Specific reference types to include. If None, all reference types are included.
-    sample_names : str or list of str, optional
-        Filter by specific sample name(s).
-    top_n : int, optional
-        Select the top N reference types based on the method.
-    top_n_method : str, optional
-        Method to select top N reference types: 'per_sample', 'total', 'average'.
-
-    Returns
-    -------
-    pd.DataFrame
-        A long-format DataFrame with columns 'reference_type', 'group', and 'proportion'.
     """
-    # Filter counts with updated options
-    filtered_df = RDD_counts_instance.filter_counts(
-        reference_types=reference_types,
-        level=level,
-        sample_names=sample_names,
-        top_n=top_n,
-        top_n_method=top_n_method,
-    )
-
-    if filtered_df.empty:
-        raise ValueError(
-            "No data available for the specified filtering options."
-        )
-
-    # Calculate proportions
-    df_proportions = calculate_proportions(filtered_df, level=level)
-
+    # Calculate proportions from complete dataset first
+    df_proportions = calculate_proportions(RDD_counts_instance.counts, level=level)
+    
     # Convert to long format
     df_long = df_proportions.reset_index().melt(
         id_vars=["filename", "group"],
         var_name="reference_type",
         value_name="proportion",
     )
+    
+    # Now filter the long-format proportion data
+    if reference_types is not None:
+        df_long = df_long[df_long["reference_type"].isin(reference_types)]
+    
+    if sample_names is not None:
+        if isinstance(sample_names, str):
+            sample_names = [sample_names]
+        df_long = df_long[df_long["filename"].isin(sample_names)]
+    
+    if group is not None:
+        if isinstance(group, str):
+            group = [group]
+        df_long = df_long[df_long["group"].isin(group)]
+    
+    # Handle top_n filtering
+    if top_n is not None and not df_long.empty:
+        if top_n_method == "per_sample":
+            # Get top N reference types per sample
+            top_refs = df_long.groupby("filename")["proportion"].nlargest(top_n).reset_index()["reference_type"].unique()
+        elif top_n_method == "total":
+            # Get top N reference types overall
+            top_refs = df_long.groupby("reference_type")["proportion"].sum().nlargest(top_n).index.tolist()
+        elif top_n_method == "average":
+            # Get top N reference types by average proportion
+            top_refs = df_long.groupby("reference_type")["proportion"].mean().nlargest(top_n).index.tolist()
+        else:
+            raise ValueError(f"Unsupported top_n_method: {top_n_method}")
+            
+        df_long = df_long[df_long["reference_type"].isin(top_refs)]
 
     return df_long
 
@@ -1023,6 +1031,10 @@ class Visualizer:  # pragma: no cover
         sample_names: Optional[Union[str, List[str]]] = None,
         top_n: Optional[int] = None,
         top_n_method: str = "per_sample",
+        upper_level: Optional[int] = None,
+        lower_level: Optional[int] = None,
+        upper_level_reference_types: Optional[List[str]] = None,
+        group: Optional[Union[str, List[str]]] = None,
         figsize: Tuple[int, int] = (10, 6),
         **kwargs,
     ):
@@ -1061,6 +1073,10 @@ class Visualizer:  # pragma: no cover
             sample_names=sample_names,
             top_n=top_n,
             top_n_method=top_n_method,
+            group=group,
+            upper_level=upper_level,
+            lower_level=lower_level,
+            upper_level_reference_types=upper_level_reference_types,
         )
 
         return self.backend.plot_reference_type_distribution(
@@ -1078,6 +1094,10 @@ class Visualizer:  # pragma: no cover
         sample_names: Optional[Union[str, List[str]]] = None,
         top_n: Optional[int] = None,
         top_n_method: str = "per_sample",
+        group: Optional[Union[str, List[str]]] = None,
+        upper_level: Optional[int] = None,
+        lower_level: Optional[int] = None,
+        upper_level_reference_types: Optional[List[str]] = None,
         **kwargs,
     ):
         """
@@ -1116,6 +1136,10 @@ class Visualizer:  # pragma: no cover
             sample_names=sample_names,
             top_n=top_n,
             top_n_method=top_n_method,
+            group=group,
+            upper_level=upper_level,
+            lower_level=lower_level,
+            upper_level_reference_types=upper_level_reference_types,
         )
 
         return self.backend.box_plot_RDD_proportions(
