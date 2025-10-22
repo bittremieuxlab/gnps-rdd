@@ -7,6 +7,7 @@ from typing import List, Optional, Tuple
 
 # Third-party imports
 import pandas as pd
+from gnpsdata import workflow_classicnetworking
 
 
 def _load_RDD_metadata(
@@ -489,3 +490,27 @@ def calculate_proportions(
     )
 
     return df_proportions
+
+def get_gnps_task_data(task_id: str, gnps2=True) -> pd.DataFrame:
+    """
+    Retrieve GNPS task data using the workflow_classicnetworking module.
+
+    Parameters
+    ----------
+    task_id : str
+        The GNPS task ID to retrieve data for.
+    gnps2 : bool, optional
+        Whether to use GNPS2 API, by default True.
+
+    Returns
+    -------
+    pd.DataFrame
+        A dataframe with the cluster data.
+    """
+    if gnps2:
+        cluster_data = workflow_classicnetworking.get_clusterinfo_dataframe(
+            task_id, gnps2=gnps2)
+    else:
+        cluster_data = workflow_classicnetworking.get_clustersummary_dataframe(
+            task_id, gnps2=gnps2)
+    return cluster_data

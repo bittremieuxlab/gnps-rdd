@@ -16,6 +16,7 @@ from .utils import (
     get_sample_metadata,
     normalize_network,
     split_reference_sample,
+    get_gnps_task_data
 )
 
 
@@ -52,8 +53,8 @@ class RDDCounts:
 
     def __init__(
         self,
-        gnps_network_path: str,
         sample_types: str,
+        gnps_network_path: Optional[str] =None,
         sample_groups: List[str] = None,
         reference_groups: List[str] = None,
         sample_group_col: str = "group",
@@ -62,9 +63,16 @@ class RDDCounts:
         external_sample_metadata: Optional[str] = None,
         ontology_columns: Optional[List[str]] = None,
         blank_identifier: str = "water",
+        task_id: Optional[str] = None,
+        gnps_2: Optional[str] = True,
     ) -> None:
-
-        self.raw_gnps_network = pd.read_csv(gnps_network_path, sep="\t")
+        
+        if task_id is None:
+            self.raw_gnps_network = pd.read_csv(gnps_network_path, sep="\t")
+        else:
+            gnps_data = get_gnps_task_data(task_id, gnps_2)
+            self.raw_gnps_network = gnps_data
+        print(self.raw_gnps_network.head())
         self.sample_types = sample_types
         self.sample_groups = sample_groups
         self.reference_groups = reference_groups
