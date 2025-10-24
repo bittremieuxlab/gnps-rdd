@@ -72,7 +72,6 @@ class RDDCounts:
         else:
             gnps_data = get_gnps_task_data(task_id, gnps_2)
             self.raw_gnps_network = gnps_data
-        print(self.raw_gnps_network.head())
         self.sample_types = sample_types
         self.sample_groups = sample_groups
         self.reference_groups = reference_groups

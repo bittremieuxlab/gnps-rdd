@@ -408,10 +408,14 @@ class MatplotlibBackend(VisualizationBackend):
         group_by: bool = False,
         group_colors: Optional[dict] = None,
         figsize: Tuple[int, int] = (10, 6),
+        ax=None,
         **kwargs,
     ):
-
-        fig, ax = plt.subplots(figsize=figsize)
+        # Only create figure if ax is not provided
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)
+        else:
+            fig = ax.get_figure()
 
         if group_by:
             # Grouped boxplot using 'hue'
@@ -422,6 +426,7 @@ class MatplotlibBackend(VisualizationBackend):
                 data=data,
                 ax=ax,
                 palette=group_colors,
+                showfliers=False,
                 orient="v",
                 **kwargs,
             )
@@ -907,7 +912,7 @@ class PlotlyBackend(VisualizationBackend):
             template="plotly_white",
         )
         return fig
-
+    
     def plot_sankey(
         self,
         RDD_counts: "RDDCounts",
@@ -971,6 +976,7 @@ class PlotlyBackend(VisualizationBackend):
         fig = go.Figure(
             data=[
                 go.Sankey(
+                    arrangement="fixed",
                     node=dict(
                         pad=15,
                         thickness=20,
@@ -1005,8 +1011,8 @@ class PlotlyBackend(VisualizationBackend):
             )
 
         return fig
-
-
+    
+    
 class Visualizer:  # pragma: no cover
     def __init__(self, backend: VisualizationBackend):
         self.backend = backend
