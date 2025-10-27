@@ -452,58 +452,80 @@ class RDDCounts:
 
         return filtered_df
 
-    def update_groups(self, metadata_file: str, merge_column: str) -> None:
+    def update_groups(self, metadata_source: Union[str, dict], merge_column: Optional[str] = None) -> None:
         """
         Updates the 'group' column in the RDD counts and sample_metadata
         DataFrames based on user-provided metadata.
 
         Parameters
         ----------
-        metadata_file : str
-            Path to the metadata file (CSV or TSV) containing updated group
-            information.
-        merge_column : str
+        metadata_source : str or dict
+            Either:
+            - Path to the metadata file (CSV or TSV) containing updated group information, or
+            - Dictionary mapping from current group values to new group values 
+            (e.g., {"G1": "Vegan", "G2": "Omnivore"})
+        merge_column : str, optional
             The column in the metadata file to use for updating the group information.
+            Required when metadata_source is a file path, ignored when it's a dictionary.
 
         Raises
         ------
         ValueError
-            If the metadata file is not a valid CSV or TSV file or if the necessary
-            columns are missing.
+            If the metadata file is not a valid CSV or TSV file, if the necessary
+            columns are missing, or if merge_column is not provided for file input.
         """
-        # Detect file extension to determine the separator
-        file_extension = os.path.splitext(metadata_file)[1].lower()
-        if file_extension == ".csv":
-            metadata = pd.read_csv(metadata_file)
-        elif file_extension in [".tsv", ".txt"]:
-            metadata = pd.read_csv(metadata_file, sep="\t")
+    
+        if isinstance(metadata_source, dict):
+            # Dictionary mapping: map current group values to new ones
+            group_mapping = metadata_source
+            
+            # Update the 'group' column in counts using the mapping
+            self.counts["group"] = self.counts["group"].map(group_mapping).fillna(self.counts["group"])
+            
+            # Update the sample_metadata using the sample_group_col
+            self.sample_metadata[self.sample_group_col] = (
+                self.sample_metadata[self.sample_group_col].map(group_mapping)
+                .fillna(self.sample_metadata[self.sample_group_col])
+            )
+            
         else:
-            raise ValueError("Metadata file must be either a CSV or TSV.")
+            # File-based mapping: existing functionality
+            if merge_column is None:
+                raise ValueError("merge_column must be provided when metadata_source is a file path.")
+                
+            metadata_file = metadata_source
+            
+            # Detect file extension to determine the separator
+            file_extension = os.path.splitext(metadata_file)[1].lower()
+            if file_extension == ".csv":
+                metadata = pd.read_csv(metadata_file)
+            elif file_extension in [".tsv", ".txt"]:
+                metadata = pd.read_csv(metadata_file, sep="\t")
+            else:
+                raise ValueError("Metadata file must be either a CSV or TSV.")
 
-        # Ensure that the metadata contains the necessary columns
-        if not {"filename", merge_column}.issubset(metadata.columns):
-            raise ValueError(
-                f"Metadata file must contain 'filename' and '{merge_column}' columns."
+            # Ensure that the metadata contains the necessary columns
+            if not {"filename", merge_column}.issubset(metadata.columns):
+                raise ValueError(
+                    f"Metadata file must contain 'filename' and '{merge_column}' columns."
+                )
+
+            # Create a mapping from filename to new group
+            filename_to_group = metadata.set_index("filename")[merge_column].to_dict()
+
+            # Update the 'group' column in counts
+            self.counts["group"] = (
+                self.counts["filename"]
+                .map(filename_to_group)
+                .fillna(self.counts["group"])
             )
 
-        # Create a mapping from filename to new group
-        filename_to_group = metadata.set_index("filename")[
-            merge_column
-        ].to_dict()
-
-        # Update the 'group' column in counts
-        self.counts["group"] = (
-            self.counts["filename"]
-            .map(filename_to_group)
-            .fillna(self.counts["group"])
-        )
-
-        # Update the sample_metadata
-        self.sample_metadata["group"] = (
-            self.sample_metadata["filename"]
-            .map(filename_to_group)
-            .fillna(self.sample_metadata["group"])
-        )
+            # Update the sample_metadata
+            self.sample_metadata[self.sample_group_col] = (
+                self.sample_metadata["filename"]
+                .map(filename_to_group)
+                .fillna(self.sample_metadata[self.sample_group_col])
+            )
 
     def generate_RDDflows(
         self,
