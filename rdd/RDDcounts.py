@@ -16,7 +16,7 @@ from .utils import (
     get_sample_metadata,
     normalize_network,
     split_reference_sample,
-    get_gnps_task_data
+    get_gnps_task_data,
 )
 
 
@@ -54,7 +54,7 @@ class RDDCounts:
     def __init__(
         self,
         sample_types: str,
-        gnps_network_path: Optional[str] =None,
+        gnps_network_path: Optional[str] = None,
         sample_groups: List[str] = None,
         reference_groups: List[str] = None,
         sample_group_col: str = "group",
@@ -66,7 +66,7 @@ class RDDCounts:
         task_id: Optional[str] = None,
         gnps_2: Optional[str] = True,
     ) -> None:
-        
+
         if task_id is None:
             self.raw_gnps_network = pd.read_csv(gnps_network_path, sep="\t")
         else:
@@ -96,7 +96,11 @@ class RDDCounts:
             )
         )
 
-        self.ontology_table = self.sample_types_df.copy().drop(columns=["sample_name"]).drop_duplicates()
+        self.ontology_table = (
+            self.sample_types_df.copy()
+            .drop(columns=["sample_name"])
+            .drop_duplicates()
+        )
         self.normalized_network = normalize_network(
             self.raw_gnps_network, self.sample_groups, self.reference_groups
         )
@@ -360,13 +364,15 @@ class RDDCounts:
             raise ValueError(
                 "RDD counts have not been created yet. Call create() first."
             )
-        
+
         if upper_level is not None and lower_level is not None:
             if upper_level >= lower_level:
                 raise ValueError("upper_level must be lower than lower_level.")
 
             if upper_level_reference_types is None:
-                raise ValueError("Must provide upper_level_reference_types when using upper_level filtering.")
+                raise ValueError(
+                    "Must provide upper_level_reference_types when using upper_level filtering."
+                )
 
             # Get column names from level indices (assuming ontology_columns_renamed is ordered by level)
             upper_ontology_col = self.ontology_columns_renamed[upper_level - 1]
@@ -375,7 +381,9 @@ class RDDCounts:
             # Matching lower-level reference types
             reference_types = (
                 self.ontology_table[
-                    self.ontology_table[upper_ontology_col].isin(upper_level_reference_types)
+                    self.ontology_table[upper_ontology_col].isin(
+                        upper_level_reference_types
+                    )
                 ][lower_ontology_col]
                 .dropna()
                 .unique()
@@ -384,7 +392,6 @@ class RDDCounts:
 
             # Override level to lower_level for filtering
             level = lower_level
-            
 
         # Filter by ontology level
         filtered_df = self.counts[self.counts["level"] == level]
@@ -407,12 +414,11 @@ class RDDCounts:
         if top_n is not None:
             if top_n_method == "per_sample":
                 top_df = (
-                    filtered_df.groupby("filename")
-                    .apply(
-                        lambda df: df.nlargest(top_n, "count")[
-                            ["reference_type"]
-                        ]
+                    filtered_df.sort_values(
+                        ["filename", "count"], ascending=[True, False]
                     )
+                    .groupby("filename")
+                    .head(top_n)
                     .reset_index(drop=True)
                 )
                 top_reference_types = (
@@ -452,7 +458,11 @@ class RDDCounts:
 
         return filtered_df
 
-    def update_groups(self, metadata_source: Union[str, dict], merge_column: Optional[str] = None) -> None:
+    def update_groups(
+        self,
+        metadata_source: Union[str, dict],
+        merge_column: Optional[str] = None,
+    ) -> None:
         """
         Updates the 'group' column in the RDD counts and sample_metadata
         DataFrames based on user-provided metadata.
@@ -462,7 +472,7 @@ class RDDCounts:
         metadata_source : str or dict
             Either:
             - Path to the metadata file (CSV or TSV) containing updated group information, or
-            - Dictionary mapping from current group values to new group values 
+            - Dictionary mapping from current group values to new group values
             (e.g., {"G1": "Vegan", "G2": "Omnivore"})
         merge_column : str, optional
             The column in the metadata file to use for updating the group information.
@@ -474,27 +484,34 @@ class RDDCounts:
             If the metadata file is not a valid CSV or TSV file, if the necessary
             columns are missing, or if merge_column is not provided for file input.
         """
-    
+
         if isinstance(metadata_source, dict):
             # Dictionary mapping: map current group values to new ones
             group_mapping = metadata_source
-            
+
             # Update the 'group' column in counts using the mapping
-            self.counts["group"] = self.counts["group"].map(group_mapping).fillna(self.counts["group"])
-            
+            self.counts["group"] = (
+                self.counts["group"]
+                .map(group_mapping)
+                .fillna(self.counts["group"])
+            )
+
             # Update the sample_metadata using the sample_group_col
             self.sample_metadata[self.sample_group_col] = (
-                self.sample_metadata[self.sample_group_col].map(group_mapping)
+                self.sample_metadata[self.sample_group_col]
+                .map(group_mapping)
                 .fillna(self.sample_metadata[self.sample_group_col])
             )
-            
+
         else:
             # File-based mapping: existing functionality
             if merge_column is None:
-                raise ValueError("merge_column must be provided when metadata_source is a file path.")
-                
+                raise ValueError(
+                    "merge_column must be provided when metadata_source is a file path."
+                )
+
             metadata_file = metadata_source
-            
+
             # Detect file extension to determine the separator
             file_extension = os.path.splitext(metadata_file)[1].lower()
             if file_extension == ".csv":
@@ -511,7 +528,9 @@ class RDDCounts:
                 )
 
             # Create a mapping from filename to new group
-            filename_to_group = metadata.set_index("filename")[merge_column].to_dict()
+            filename_to_group = metadata.set_index("filename")[
+                merge_column
+            ].to_dict()
 
             # Update the 'group' column in counts
             self.counts["group"] = (

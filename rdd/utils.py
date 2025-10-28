@@ -143,36 +143,61 @@ def _validate_groups(
         )
 
 
-def normalize_network(gnps_network, sample_groups=None, reference_groups=None):
+def normalize_network(
+    gnps_network: pd.DataFrame,
+    sample_groups: Optional[List[str]] = None,
+    reference_groups: Optional[List[str]] = None,
+) -> pd.DataFrame:
     """
-    Normalize the GNPS network to extract unique (filename, cluster_index) pairs.
+    Normalize GNPS network data to a standard format with 'filename' and 'cluster_index' columns.
+
+    This function takes either GNPS1 (classic) or GNPS2 data formats and converts them
+    to a unified structure for downstream RDD analysis.
 
     Parameters
     ----------
     gnps_network : pd.DataFrame
-        Raw GNPS network file.
-    sample_groups : list of str, optional
-        Sample groups to retain.
-    reference_groups : list of str, optional
-        Reference groups to retain.
+        Raw GNPS network data from either GNPS1 or GNPS2.
+    sample_groups : List[str], optional
+        Sample group identifiers (e.g., ["G1", "G2"]). Required for GNPS1 data
+        (with UniqueFileSources) which needs explicit group filtering.
+    reference_groups : List[str], optional
+        Reference group identifiers (e.g., ["G3", "G4"]). Required for GNPS1 data
+        (with UniqueFileSources) which needs explicit group filtering.
 
     Returns
     -------
     pd.DataFrame
-        Normalized DataFrame with columns 'filename' and 'cluster_index'.
+        Normalized DataFrame with standardized columns 'filename' and 'cluster_index'.
+
+    Raises
+    ------
+    ValueError
+        If processing GNPS1 data and sample_groups or reference_groups are not provided.
     """
     network = gnps_network.copy()
 
     if "UniqueFileSources" in network.columns:
-        groups = {f"G{i}" for i in range(1, 7)}
+        # GNPS1 (Classic) - requires group filtering
+        if not sample_groups or not reference_groups:
+            raise ValueError(
+                "GNPS1 data (with UniqueFileSources) requires both sample_groups and "
+                "reference_groups for filtering. GNPS2 data does not require groups."
+            )
+
+        groups = {
+            col for col in gnps_network.columns if re.match(r"^G\d+$", col)
+        }
         groups_excluded = list(
             groups - set([*sample_groups, *reference_groups])
         )
+
         df_selected = gnps_network[
             (gnps_network[sample_groups] > 0).any(axis=1)
             | (gnps_network[reference_groups] > 0).any(axis=1)
             & (gnps_network[groups_excluded] == 0).all(axis=1)
         ].copy()
+
         df_exploded = df_selected.assign(
             filename=df_selected["UniqueFileSources"].str.split("|")
         ).explode("filename")
@@ -188,8 +213,9 @@ def normalize_network(gnps_network, sample_groups=None, reference_groups=None):
         df_normalized["filename"] = remove_filename_extension(
             df_normalized["filename"]
         )
-        return df_normalized
+
     else:
+        # GNPS2 - direct column renaming, no group filtering needed
         network["#Filename"] = network["#Filename"].str.replace(
             "input_spectra/", ""
         )
@@ -206,7 +232,7 @@ def normalize_network(gnps_network, sample_groups=None, reference_groups=None):
             df_normalized["filename"]
         )
 
-        return df_normalized
+    return df_normalized
 
 
 def get_sample_metadata(
@@ -351,17 +377,17 @@ def split_reference_sample(
 
 def remove_filename_extension(filename_col):
     """
-    Removes the file extension from a filename column in a DataFrame.
+    Removes the file extension from a pandas Series of filenames.
 
     Parameters
     ----------
-    filename_col : str
-        The name of the column containing filenames.
+    filename_col : pd.Series
+        A pandas Series containing filenames.
 
     Returns
     -------
-    str
-        The filename without its extension.
+    pd.Series
+        A pandas Series containing filenames without their extensions.
     """
     return filename_col.str.replace(r"\.[^.]+$", "", regex=True)
 
@@ -491,6 +517,7 @@ def calculate_proportions(
 
     return df_proportions
 
+
 def get_gnps_task_data(task_id: str, gnps2=True) -> pd.DataFrame:
     """
     Retrieve GNPS task data using the workflow_classicnetworking module.
@@ -509,8 +536,10 @@ def get_gnps_task_data(task_id: str, gnps2=True) -> pd.DataFrame:
     """
     if gnps2:
         cluster_data = workflow_classicnetworking.get_clusterinfo_dataframe(
-            task_id, gnps2=gnps2)
+            task_id, gnps2=gnps2
+        )
     else:
         cluster_data = workflow_classicnetworking.get_clustersummary_dataframe(
-            task_id, gnps2=gnps2)
+            task_id, gnps2=gnps2
+        )
     return cluster_data

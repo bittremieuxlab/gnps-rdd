@@ -207,7 +207,7 @@ def filter_and_group_RDD_counts(
     group: Optional[Union[str, List[str]]] = None,
     upper_level: Optional[int] = None,
     lower_level: Optional[int] = None,
-    upper_level_reference_types: Optional[List[str]] = None
+    upper_level_reference_types: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     """
     Filter and group the RDD counts data by ontology level, reference types, and optional parameters.
@@ -275,49 +275,66 @@ def prepare_boxplot_data(
     group: Optional[Union[str, List[str]]] = None,
     upper_level: Optional[int] = None,
     lower_level: Optional[int] = None,
-    upper_level_reference_types: Optional[List[str]] = None
+    upper_level_reference_types: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     """
     Prepare the RDD proportions data for box plotting.
     """
     # Calculate proportions from complete dataset first
-    df_proportions = calculate_proportions(RDD_counts_instance.counts, level=level)
-    
+    df_proportions = calculate_proportions(
+        RDD_counts_instance.counts, level=level
+    )
+
     # Convert to long format
     df_long = df_proportions.reset_index().melt(
         id_vars=["filename", "group"],
         var_name="reference_type",
         value_name="proportion",
     )
-    
+
     # Now filter the long-format proportion data
     if reference_types is not None:
         df_long = df_long[df_long["reference_type"].isin(reference_types)]
-    
+
     if sample_names is not None:
         if isinstance(sample_names, str):
             sample_names = [sample_names]
         df_long = df_long[df_long["filename"].isin(sample_names)]
-    
+
     if group is not None:
         if isinstance(group, str):
             group = [group]
         df_long = df_long[df_long["group"].isin(group)]
-    
+
     # Handle top_n filtering
     if top_n is not None and not df_long.empty:
         if top_n_method == "per_sample":
             # Get top N reference types per sample
-            top_refs = df_long.groupby("filename")["proportion"].nlargest(top_n).reset_index()["reference_type"].unique()
+            top_refs = (
+                df_long.groupby("filename")["proportion"]
+                .nlargest(top_n)
+                .reset_index()["reference_type"]
+                .unique()
+            )
         elif top_n_method == "total":
             # Get top N reference types overall
-            top_refs = df_long.groupby("reference_type")["proportion"].sum().nlargest(top_n).index.tolist()
+            top_refs = (
+                df_long.groupby("reference_type")["proportion"]
+                .sum()
+                .nlargest(top_n)
+                .index.tolist()
+            )
         elif top_n_method == "average":
             # Get top N reference types by average proportion
-            top_refs = df_long.groupby("reference_type")["proportion"].mean().nlargest(top_n).index.tolist()
+            top_refs = (
+                df_long.groupby("reference_type")["proportion"]
+                .mean()
+                .nlargest(top_n)
+                .index.tolist()
+            )
         else:
             raise ValueError(f"Unsupported top_n_method: {top_n_method}")
-            
+
         df_long = df_long[df_long["reference_type"].isin(top_refs)]
 
     return df_long
@@ -912,7 +929,7 @@ class PlotlyBackend(VisualizationBackend):
             template="plotly_white",
         )
         return fig
-    
+
     def plot_sankey(
         self,
         RDD_counts: "RDDCounts",
@@ -1011,8 +1028,8 @@ class PlotlyBackend(VisualizationBackend):
             )
 
         return fig
-    
-    
+
+
 class Visualizer:  # pragma: no cover
     def __init__(self, backend: VisualizationBackend):
         self.backend = backend
