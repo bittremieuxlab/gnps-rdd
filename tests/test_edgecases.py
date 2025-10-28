@@ -4,11 +4,10 @@ from io import StringIO
 import sys
 import os
 
-# Add the path to the 'rdd' directory to the system path
-project_path = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "rdd")
-)
-sys.path.append(project_path)
+# Add the path to the repository root to the system path
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if project_path not in sys.path:
+    sys.path.insert(0, project_path)
 from rdd.RDDcounts import RDDCounts
 from rdd.utils import (
     _validate_groups,
