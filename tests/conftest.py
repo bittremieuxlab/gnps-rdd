@@ -103,22 +103,24 @@ def load_test_files(
     mock_sample_metadata,
     mock_reference_metadata,
 ):
-    def _load(fixture_type):
-        if fixture_type == "gnps1":
-            return (
+    def _load(fixture_type: str):
+        mapping = {
+            "gnps1": (
                 mock_network_based_gnps,
                 mock_sample_metadata,
                 mock_reference_metadata,
-            )
-        elif fixture_type == "gnps2":
-            return (
+            ),
+            "gnps2": (
                 mock_direct_gnps,
                 mock_sample_metadata,
                 mock_reference_metadata,
-            )
-        else:
+            ),
+        }
+        try:
+            return mapping[fixture_type]
+        except KeyError as e:
             raise ValueError(
-                "Unknown fixture type. Use 'network' or 'direct'."
-            )
+                f"Unknown fixture_type: {fixture_type!r}. Use 'gnps1' or 'gnps2'."
+            ) from e
 
     return _load

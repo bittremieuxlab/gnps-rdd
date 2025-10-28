@@ -309,11 +309,13 @@ def prepare_boxplot_data(
     # Handle top_n filtering
     if top_n is not None and not df_long.empty:
         if top_n_method == "per_sample":
-            # Get top N reference types per sample
+            # Top N reference types per sample
             top_refs = (
-                df_long.groupby("filename")["proportion"]
-                .nlargest(top_n)
-                .reset_index()["reference_type"]
+                df_long.sort_values(
+                    ["filename", "proportion"], ascending=[True, False]
+                )
+                .groupby("filename", as_index=False, sort=False)
+                .head(top_n)["reference_type"]
                 .unique()
             )
         elif top_n_method == "total":

@@ -193,8 +193,10 @@ def normalize_network(
         )
 
         df_selected = gnps_network[
-            (gnps_network[sample_groups] > 0).any(axis=1)
-            | (gnps_network[reference_groups] > 0).any(axis=1)
+            (
+                (gnps_network[sample_groups] > 0).any(axis=1)
+                | (gnps_network[reference_groups] > 0).any(axis=1)
+            )
             & (gnps_network[groups_excluded] == 0).all(axis=1)
         ].copy()
 
@@ -251,7 +253,7 @@ def get_sample_metadata(
     sample_groups : list of str, optional
         List of sample group names to extract from the GNPS network.
     external_sample_metadata : str, optional
-        Path to an external sample metadata file (CSV).
+        Path to an external sample metadata file (CSV, TSV, or TXT).
     filename_col : str, optional
         Column name for filenames in the metadata file. Default is "filename".
 
@@ -284,6 +286,10 @@ def get_sample_metadata(
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"External metadata file '{external_sample_metadata}' not found."
+            ) from None
+        if filename_col not in sample_metadata.columns:
+            raise KeyError(
+                f"Column '{filename_col}' not found in external_sample_metadata."
             )
         sample_metadata.rename(
             columns={filename_col: "filename"}, inplace=True
@@ -293,6 +299,14 @@ def get_sample_metadata(
         )
         return sample_metadata
     else:
+        if raw_gnps_network is None:
+            raise ValueError(
+                "raw_gnps_network is required when external_sample_metadata is not provided."
+            )
+        if not sample_groups:
+            raise ValueError(
+                "sample_groups must be provided when deriving sample metadata from the GNPS network."
+            )
         df_filtered = raw_gnps_network[
             ~raw_gnps_network["DefaultGroups"].str.contains(",")
         ]

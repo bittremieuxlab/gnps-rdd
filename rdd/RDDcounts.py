@@ -55,8 +55,8 @@ class RDDCounts:
         self,
         sample_types: str,
         gnps_network_path: Optional[str] = None,
-        sample_groups: List[str] = None,
-        reference_groups: List[str] = None,
+        sample_groups: Optional[List[str]] = None,
+        reference_groups: Optional[List[str]] = None,
         sample_group_col: str = "group",
         levels: int = 6,
         external_reference_metadata: Optional[str] = None,
@@ -64,9 +64,13 @@ class RDDCounts:
         ontology_columns: Optional[List[str]] = None,
         blank_identifier: str = "water",
         task_id: Optional[str] = None,
-        gnps_2: Optional[str] = True,
+        gnps_2: bool = True,
     ) -> None:
 
+        if (task_id is None) == (gnps_network_path is None):
+            raise ValueError(
+                "Provide exactly one of task_id or gnps_network_path."
+            )
         if task_id is None:
             self.raw_gnps_network = pd.read_csv(gnps_network_path, sep="\t")
         else:
@@ -96,9 +100,16 @@ class RDDCounts:
             )
         )
 
+        if self.ontology_columns_renamed:
+            if self.levels > len(self.ontology_columns_renamed):
+                raise ValueError(
+                    f"levels ({self.levels}) exceeds provided ontology columns "
+                    f"({len(self.ontology_columns_renamed)})."
+                )
+
         self.ontology_table = (
             self.sample_types_df.copy()
-            .drop(columns=["sample_name"])
+            .drop(columns=["sample_name"], errors="ignore")
             .drop_duplicates()
         )
         self.normalized_network = normalize_network(
@@ -130,6 +141,10 @@ class RDDCounts:
             The name of the ontology column corresponding to the specified level.
         """
         if self.ontology_columns_renamed:
+            if level < 1 or level > len(self.ontology_columns_renamed):
+                raise ValueError(
+                    f"Invalid level {level}; expected 1..{len(self.ontology_columns_renamed)}."
+                )
             return self.ontology_columns_renamed[level - 1]
         return f"sample_type_group{level}"
 
@@ -213,9 +228,12 @@ class RDDCounts:
             inplace=True,
         )
         cluster_count_long["level"] = 0
-        cluster_count_long["group"] = cluster_count_long.merge(
-            self.sample_metadata, on="filename", how="inner"
-        )[self.sample_group_col]
+        filename_to_group = self.sample_metadata.set_index("filename")[
+            self.sample_group_col
+        ].to_dict()
+        cluster_count_long["group"] = cluster_count_long["filename"].map(
+            filename_to_group
+        )
         return cluster_count_long
 
     def create_RDD_counts_all_levels(self) -> pd.DataFrame:
@@ -361,9 +379,7 @@ class RDDCounts:
             Filtered RDD counts dataframe.
         """
         if self.counts is None:
-            raise ValueError(
-                "RDD counts have not been created yet. Call create() first."
-            )
+            raise ValueError("RDD counts are not initialized.")
 
         if upper_level is not None and lower_level is not None:
             if upper_level >= lower_level:
@@ -374,9 +390,13 @@ class RDDCounts:
                     "Must provide upper_level_reference_types when using upper_level filtering."
                 )
 
-            # Get column names from level indices (assuming ontology_columns_renamed is ordered by level)
-            upper_ontology_col = self.ontology_columns_renamed[upper_level - 1]
-            lower_ontology_col = self.ontology_columns_renamed[lower_level - 1]
+            # Resolve level column names via helper to support both default and custom columns
+            upper_ontology_col = self._get_ontology_column_for_level(
+                upper_level
+            )
+            lower_ontology_col = self._get_ontology_column_for_level(
+                lower_level
+            )
 
             # Matching lower-level reference types
             reference_types = (
