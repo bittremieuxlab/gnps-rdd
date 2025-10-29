@@ -124,7 +124,7 @@ file2,ref2,type2,subtype2,simple"""
     ref_file.write_text(ref_metadata)
 
     with pytest.raises(
-        ValueError, match="levels .* exceeds provided ontology columns"
+        ValueError, match=r"levels .* exceeds provided ontology columns"
     ):
         RDDCounts(
             sample_types="all",
@@ -188,17 +188,6 @@ def test_rddcounts_get_ontology_column_default_format(load_test_files):
 
 def test_filter_counts_without_initialization():
     """Test filter_counts raises error when counts not initialized."""
-    # Create a minimal RDDCounts instance
-    gnps_data = pd.DataFrame(
-        {
-            "cluster index": [1],
-            "#Filename": ["file1.mzML"],
-            "#ClusterIdx": [1],
-        }
-    )
-
-    # We need to manually create an instance without calling methods that initialize counts
-    # This is tricky, so we'll use a mock or set counts to None
     with pytest.raises(ValueError, match="RDD counts are not initialized"):
         rdd = object.__new__(RDDCounts)
         rdd.counts = None

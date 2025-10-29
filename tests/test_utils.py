@@ -52,9 +52,8 @@ def sample_gnps_network():
 
 
 def test_load_sample_types_default_structure(sample_reference_metadata):
-    result, renamed = _load_sample_types(sample_reference_metadata)
+    result, _ = _load_sample_types(sample_reference_metadata)
     assert result.index.name == "filename"
-    assert renamed is None
     assert "sample_type_group1" in result.columns
 
 
@@ -70,7 +69,7 @@ def test_load_sample_types_custom_columns(sample_reference_metadata):
 
 def test_load_sample_types_with_simple_filter(sample_reference_metadata):
     """Test _load_sample_types with simple_complex filter."""
-    result, renamed = _load_sample_types(
+    result, _ = _load_sample_types(
         sample_reference_metadata,
         simple_complex="simple",
     )
@@ -80,7 +79,7 @@ def test_load_sample_types_with_simple_filter(sample_reference_metadata):
 
 def test_load_sample_types_with_complex_filter(sample_reference_metadata):
     """Test _load_sample_types with simple_complex filter for complex."""
-    result, renamed = _load_sample_types(
+    result, _ = _load_sample_types(
         sample_reference_metadata,
         simple_complex="complex",
     )

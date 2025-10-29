@@ -108,6 +108,9 @@ def _load_sample_types(
 
     # Rename user-defined ontology columns
     renamed_columns = [f"{col}{i+1}" for i, col in enumerate(ontology_columns)]
+    assert len(ontology_columns) == len(
+        renamed_columns
+    )  # Safety check for zip
     renamer = dict(zip(ontology_columns, renamed_columns))
     df = reference_metadata[
         ["filename", "sample_name", *ontology_columns]

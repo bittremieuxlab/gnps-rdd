@@ -10,11 +10,10 @@ target-version = ["py310"]
 include = '\.pyi?$'
 
 [tool.pytest.ini_options]
-# Use non-interactive matplotlib backend for testing
+# Matplotlib backend set to Agg in tests/conftest.py for headless CI testing
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
-# Set matplotlib backend to Agg for headless testing
 addopts = [
     "--tb=short",
 ]

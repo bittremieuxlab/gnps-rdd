@@ -2,9 +2,6 @@ import os
 import sys
 import pytest
 import pandas as pd
-import matplotlib
-
-matplotlib.use("Agg")  # Use non-interactive backend for testing
 import matplotlib.pyplot as plt
 import plotly.express as px
 import plotly.graph_objects as go

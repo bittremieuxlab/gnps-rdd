@@ -38,10 +38,10 @@ def test_calculate_proportions_raises_on_multiple_levels():
 
 
 def test_load_rdd_metadata_pkg_resources(monkeypatch):
-    def fake_open_text_fail(*args, **kwargs):
+    def fake_open_text_fail(*_args, **_kwargs):
         raise ModuleNotFoundError
 
-    def fake_resource_stream(*args, **kwargs):
+    def fake_resource_stream(*_args, **_kwargs):
         return StringIO("filename\tsample_type\nfile1\tcomplex")
 
     monkeypatch.setattr("rdd.utils.resources.open_text", fake_open_text_fail)

@@ -408,10 +408,7 @@ class MatplotlibBackend(VisualizationBackend):
                 x="reference_type",
                 y="count",
                 data=data,
-                hue="reference_type",
-                palette="viridis",
                 ax=ax,
-                legend=False,
             )
 
         ax.set_title("reference type Distribution")
@@ -471,8 +468,6 @@ class MatplotlibBackend(VisualizationBackend):
                 y="proportion",
                 data=data,
                 ax=ax,
-                hue="reference_type",
-                legend=False,
                 showfliers=False,
                 orient="v",
                 **kwargs,
@@ -481,15 +476,13 @@ class MatplotlibBackend(VisualizationBackend):
                 x="reference_type",
                 y="proportion",
                 data=data,
-                dodge=False,  # No separation
+                dodge=False,
                 jitter=True,
-                hue="reference_type",
                 ax=ax,
                 marker="o",
                 edgecolor="black",
                 alpha=0.3,
                 linewidth=0.6,
-                legend=False,  # Disable legend for stripplot
             )
 
         ax.set_title("Proportion Distribution of Selected reference types")

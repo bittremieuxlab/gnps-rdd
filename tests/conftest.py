@@ -1,4 +1,8 @@
 # conftest.py
+import matplotlib
+
+matplotlib.use("Agg")  # Set non-interactive backend for CI testing
+
 import pytest
 import pandas as pd
 from pathlib import Path
