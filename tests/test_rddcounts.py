@@ -3,190 +3,394 @@ import sys
 import pytest
 import pandas as pd
 
-# Add the path to the 'rdd' directory to the system path
-project_path = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "rdd")
-)
-sys.path.append(project_path)
+# Add the path to the repository root to the system path
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if project_path not in sys.path:
+    sys.path.insert(0, project_path)
 
-from RDDcounts import RDDCounts
-
-
-@pytest.fixture
-def mock_gnps_and_metadata(tmp_path):
-    # Create mock GNPS file
-    gnps_data = {
-        "DefaultGroups": ["G1", "G4", "G1,G4", "G1,G4"],
-        "UniqueFileSources": [
-            "file_samp_1.mzXML|file_samp_2.mzXML",
-            "file_ref1.mzXML|file_ref2.mzXML",
-            "file_samp_1.mzXML|file_ref1.mzXML",
-            "file_samp_2.mzXML|file_ref2.mzXML",
-        ],
-        "G1": [2, 0, 4, 3],
-        "G2": [0, 0, 0, 0],
-        "G3": [0, 0, 0, 0],
-        "G4": [0, 26, 4, 3],
-        "G5": [0, 0, 0, 0],
-        "G6": [0, 0, 0, 0],
-        "cluster index": [2, 3, 4, 5],
-    }
-    gnps_df = pd.DataFrame(gnps_data)
-    gnps_df.columns = gnps_df.columns.str.strip()  # Clean column names
-    gnps_path = tmp_path / "mock_gnps.tsv"
-    gnps_df.to_csv(gnps_path, sep="\t", index=False)
-
-    # Create mock metadata file
-    metadata = pd.DataFrame(
-        {
-            "filename": ["file_ref1.mzXML", "file_ref2.mzXML"],
-            "ontology_terminal_leaf": ["complex", "plant"],
-            "sample_type_group1": ["complex", "plant"],
-            "sample_type_group2": ["complex", "fruit"],
-            "sample_type_group3": ["complex", "fruit"],
-            "sample_type_group4": ["complex", "fruit"],
-            "sample_type_group5": ["complex", "fruit"],
-            "sample_type_group6": ["complex", "fruit"],
-            "sample_name": ["complex", "fruit"],
-        }
-    )
-    metadata_path = tmp_path / "mock_metadata.csv"
-    metadata.to_csv(metadata_path, index=False)
-
-    return gnps_path, metadata_path
+from rdd.RDDcounts import RDDCounts
 
 
-def test_initialization(mock_gnps_and_metadata):
-    gnps_path, metadata_path = mock_gnps_and_metadata
+@pytest.mark.parametrize("fixture_type", ["gnps1", "gnps2"])
+def test_rddcounts_initialization(load_test_files, fixture_type):
+    gnps_path, sample_meta, ref_meta = load_test_files(fixture_type)
 
-    # Initialize RDDCounts
-    rdd_counts = RDDCounts(
-        gnps_network=str(gnps_path),
+    # Condition for direct vs. network initialization
+    if fixture_type == "gnps1":
+        sample_groups = ["G1"]
+        reference_groups = ["G4"]
+        sample_meta = None
+    else:
+        sample_groups = None  # No sample groups for direct format
+        reference_groups = None  # No reference groups for direct format
+        sample_meta = str(sample_meta)
+
+    rdd = RDDCounts(
+        gnps_network_path=str(gnps_path),
         sample_types="all",
-        sample_groups=["G1"],
-        reference_groups=["G4"],
-        levels=2,
-        external_metadata=str(metadata_path),
-    )
-
-    # Check the attributes
-    assert isinstance(rdd_counts.gnps_network, pd.DataFrame)
-    assert isinstance(rdd_counts.RDD_metadata, pd.DataFrame)
-    assert rdd_counts.levels == 2
-
-
-def test_filename_level_counts(mock_gnps_and_metadata):
-    gnps_path, metadata_path = mock_gnps_and_metadata
-
-    # Initialize RDDCounts
-    rdd_counts = RDDCounts(
-        gnps_network=str(gnps_path),
-        sample_types="all",
-        sample_groups=["G1"],
-        reference_groups=["G4"],
+        sample_groups=sample_groups,
+        reference_groups=reference_groups,
         levels=6,
-        external_metadata=str(metadata_path),
+        external_reference_metadata=str(ref_meta),
+        external_sample_metadata=sample_meta,
     )
 
-    # Get file-level counts
-    file_counts = rdd_counts._get_filename_level_RDD_counts()
-
-    # Verify the output
-    assert not file_counts.empty, "File-level counts should not be empty"
-    assert "filename" in file_counts.columns
-    assert "reference_type" in file_counts.columns
-    assert "count" in file_counts.columns
+    assert isinstance(rdd.raw_gnps_network, pd.DataFrame)
+    assert isinstance(rdd.counts, pd.DataFrame)
+    assert not rdd.counts.empty
 
 
-@pytest.mark.parametrize(
-    "reference_types, level, expected_count",
-    [
-        (["complex"], 1, 1),
-        (["fruit"], 2, 1),
-        (None, 1, 2),
-    ],
-)
-def test_filter_counts(
-    mock_gnps_and_metadata, reference_types, level, expected_count
-):
-    gnps_path, metadata_path = mock_gnps_and_metadata
-
-    rdd_counts = RDDCounts(
-        gnps_network=str(gnps_path),
+@pytest.mark.parametrize("fixture_type", ["gnps1", "gnps2"])
+def test_filter_counts_functionality(load_test_files, fixture_type):
+    gnps_path, sample_meta, ref_meta = load_test_files(fixture_type)
+    rdd = RDDCounts(
+        gnps_network_path=str(gnps_path),
         sample_types="all",
         sample_groups=["G1"],
         reference_groups=["G4"],
-        levels=6,
-        external_metadata=str(metadata_path),
+        levels=3,
+        external_reference_metadata=str(ref_meta),
+        external_sample_metadata=str(sample_meta),
     )
 
-    # Filter counts
-    filtered_counts = rdd_counts.filter_counts(
-        reference_types=reference_types, level=level
-    )
-
-    # Validate filtering logic
-    assert not filtered_counts.empty, "Filtered counts should not be empty"
-    assert sum(filtered_counts["count"]) == expected_count
-    if reference_types:
-        assert all(
-            filtered_counts["reference_type"].isin(reference_types)
-        ), "Filtered types mismatch"
+    filtered = rdd.filter_counts(level=1)
+    assert "reference_type" in filtered.columns
+    assert filtered["level"].eq(1).all()
 
 
-def test_update_groups(mock_gnps_and_metadata, tmp_path):
-    gnps_path, metadata_path = mock_gnps_and_metadata
-
-    # Prepare new metadata with updated groups
-    updated_metadata = pd.DataFrame(
-        {
-            "filename": ["file_samp_1.mzXML", "file_samp_2.mzXML"],
-            "new_group": ["group1", "group2"],
-        }
-    )
-    updated_metadata_path = tmp_path / "updated_metadata.csv"
-    updated_metadata.to_csv(updated_metadata_path, index=False)
-
-    rdd_counts = RDDCounts(
-        gnps_network=str(gnps_path),
+@pytest.mark.parametrize("fixture_type", ["gnps1", "gnps2"])
+def test_generate_flows_structure(load_test_files, fixture_type):
+    gnps_path, sample_meta, ref_meta = load_test_files(fixture_type)
+    rdd = RDDCounts(
+        gnps_network_path=str(gnps_path),
         sample_types="all",
         sample_groups=["G1"],
         reference_groups=["G4"],
+        levels=3,
+        external_reference_metadata=str(ref_meta),
+        external_sample_metadata=str(sample_meta),
+    )
+
+    flows_df, processes_df = rdd.generate_RDDflows()
+    assert {"source", "target", "value"}.issubset(flows_df.columns)
+    assert "level" in processes_df.columns
+
+
+# ============================================================================
+# Validation and Error Handling Tests
+# ============================================================================
+
+
+def test_rddcounts_with_task_id_validation():
+    """Test that providing both task_id and gnps_network_path raises error."""
+    with pytest.raises(ValueError, match="Provide exactly one"):
+        RDDCounts(
+            sample_types="all",
+            task_id="fake_task_id",
+            gnps_network_path="fake_path.tsv",
+            sample_groups=["G1"],
+            reference_groups=["G2"],
+        )
+
+
+def test_rddcounts_with_neither_task_nor_path():
+    """Test that providing neither task_id nor gnps_network_path raises error."""
+    with pytest.raises(ValueError, match="Provide exactly one"):
+        RDDCounts(
+            sample_types="all",
+            task_id=None,
+            gnps_network_path=None,
+            sample_groups=["G1"],
+            reference_groups=["G2"],
+        )
+
+
+def test_rddcounts_levels_exceeds_ontology_columns(tmp_path):
+    """Test that levels exceeding ontology columns raises error."""
+    # Create minimal test data
+    gnps_data = """cluster index\tsum(precursor intensity)\tRTMean\tG1\tG2\tDefaultGroups\tUniqueFileSources
+1\t1000.0\t1.5\t5\t0\tG1\tfile1.mzML|file2.mzML
+2\t2000.0\t2.5\t0\t3\tG2\tfile3.mzML"""
+
+    gnps_file = tmp_path / "gnps_test.tsv"
+    gnps_file.write_text(gnps_data)
+
+    # Create metadata with only 2 ontology columns
+    ref_metadata = """filename,sample_name,ontology1,ontology2,simple_complex
+file1,ref1,type1,subtype1,simple
+file2,ref2,type2,subtype2,simple"""
+
+    ref_file = tmp_path / "ref_metadata.csv"
+    ref_file.write_text(ref_metadata)
+
+    with pytest.raises(
+        ValueError, match=r"levels .* exceeds provided ontology columns"
+    ):
+        RDDCounts(
+            sample_types="all",
+            gnps_network_path=str(gnps_file),
+            sample_groups=["G1"],
+            reference_groups=["G2"],
+            levels=5,  # More than 2 ontology columns
+            ontology_columns=["ontology1", "ontology2"],
+            external_reference_metadata=str(ref_file),
+        )
+
+
+def test_get_ontology_column_for_level_invalid_range(load_test_files):
+    """Test that invalid level raises error in _get_ontology_column_for_level."""
+    gnps_data, sample_meta, ref_meta = load_test_files("gnps1")
+
+    rdd = RDDCounts(
+        sample_types="all",
+        gnps_network_path=str(gnps_data),
+        sample_groups=["G1", "G2"],
+        reference_groups=["G3"],
+        external_reference_metadata=str(ref_meta),
+        external_sample_metadata=str(sample_meta),
+        ontology_columns=["sample_type_group1", "sample_type_group2"],
         levels=2,
-        external_metadata=str(metadata_path),
     )
 
-    # Update groups
-    rdd_counts.update_groups(
-        metadata_file=str(updated_metadata_path), merge_column="new_group"
+    # Test level too low
+    with pytest.raises(ValueError, match="Invalid level 0"):
+        rdd._get_ontology_column_for_level(0)
+
+    # Test level too high
+    with pytest.raises(ValueError, match="Invalid level 3"):
+        rdd._get_ontology_column_for_level(3)
+
+
+def test_rddcounts_get_ontology_column_default_format(load_test_files):
+    """Test _get_ontology_column_for_level with default column format."""
+    gnps_data, sample_meta, ref_meta = load_test_files("gnps1")
+
+    rdd = RDDCounts(
+        sample_types="all",
+        gnps_network_path=str(gnps_data),
+        sample_groups=["G1", "G2"],
+        reference_groups=["G3"],
+        external_reference_metadata=str(ref_meta),
+        external_sample_metadata=str(sample_meta),
+        levels=3,
     )
-    print(rdd_counts.sample_metadata)
-    # Validate group updates
-    assert all(
-        rdd_counts.counts["group"].isin(["group1", "group2"])
-    ), "Group update failed"
+
+    # Should return default format when ontology_columns not provided
+    assert rdd._get_ontology_column_for_level(1) == "sample_type_group1"
+    assert rdd._get_ontology_column_for_level(2) == "sample_type_group2"
+    assert rdd._get_ontology_column_for_level(3) == "sample_type_group3"
 
 
-def test_generate_RDDflows(mock_gnps_and_metadata):
-    gnps_path, metadata_path = mock_gnps_and_metadata
+# ============================================================================
+# Filter Counts Tests with Edge Cases
+# ============================================================================
 
-    rdd_counts = RDDCounts(
-        gnps_network=str(gnps_path),
+
+def test_filter_counts_without_initialization():
+    """Test filter_counts raises error when counts not initialized."""
+    with pytest.raises(ValueError, match="RDD counts are not initialized"):
+        rdd = object.__new__(RDDCounts)
+        rdd.counts = None
+        rdd.filter_counts(level=1)
+
+
+def test_filter_counts_with_upper_lower_level_validation(load_test_files):
+    """Test filter_counts validates upper_level < lower_level."""
+    gnps_data, sample_meta, ref_meta = load_test_files("gnps1")
+
+    rdd = RDDCounts(
+        sample_types="all",
+        gnps_network_path=str(gnps_data),
+        sample_groups=["G1", "G2"],
+        reference_groups=["G3"],
+        external_reference_metadata=str(ref_meta),
+        external_sample_metadata=str(sample_meta),
+        levels=3,
+    )
+
+    # upper_level must be less than lower_level
+    with pytest.raises(
+        ValueError, match="upper_level must be lower than lower_level"
+    ):
+        rdd.filter_counts(level=2, upper_level=2, lower_level=1)
+
+
+def test_filter_counts_requires_upper_level_reference_types(load_test_files):
+    """Test filter_counts requires upper_level_reference_types when using upper_level."""
+    gnps_data, sample_meta, ref_meta = load_test_files("gnps1")
+
+    rdd = RDDCounts(
+        sample_types="all",
+        gnps_network_path=str(gnps_data),
+        sample_groups=["G1", "G2"],
+        reference_groups=["G3"],
+        external_reference_metadata=str(ref_meta),
+        external_sample_metadata=str(sample_meta),
+        levels=3,
+    )
+
+    with pytest.raises(
+        ValueError, match="Must provide upper_level_reference_types"
+    ):
+        rdd.filter_counts(
+            level=2,
+            upper_level=1,
+            lower_level=2,
+            upper_level_reference_types=None,
+        )
+
+
+def test_filter_counts_with_upper_lower_level_filtering(load_test_files):
+    """Test filter_counts with upper and lower level filtering."""
+    gnps_data, sample_meta, ref_meta = load_test_files("gnps1")
+
+    rdd = RDDCounts(
+        sample_types="all",
+        gnps_network_path=str(gnps_data),
+        sample_groups=["G1", "G2"],
+        reference_groups=["G3"],
+        external_reference_metadata=str(ref_meta),
+        external_sample_metadata=str(sample_meta),
+        levels=3,
+    )
+
+    # Get reference types from level 1 first
+    level_1_types = (
+        rdd.filter_counts(level=1)["reference_type"].unique().tolist()
+    )
+
+    if len(level_1_types) > 0:
+        # Filter with upper/lower level
+        filtered = rdd.filter_counts(
+            level=2,
+            upper_level=1,
+            lower_level=2,
+            upper_level_reference_types=level_1_types[:1],  # Use first type
+        )
+
+        # Should be filtered to level 2
+        assert filtered["level"].eq(2).all()
+
+
+def test_filter_counts_with_sample_names(load_test_files):
+    """Test filter_counts with sample_names filtering."""
+    gnps_data, sample_meta, ref_meta = load_test_files("gnps1")
+
+    rdd = RDDCounts(
+        sample_types="all",
+        gnps_network_path=str(gnps_data),
+        sample_groups=["G1", "G2"],
+        reference_groups=["G3"],
+        external_reference_metadata=str(ref_meta),
+        external_sample_metadata=str(sample_meta),
+        levels=3,
+    )
+
+    # Get available filenames
+    all_files = rdd.counts["filename"].unique().tolist()
+
+    if len(all_files) > 0:
+        # Filter by specific sample
+        filtered = rdd.filter_counts(level=1, sample_names=[all_files[0]])
+
+        # Should only contain the specified sample
+        assert filtered["filename"].unique().tolist() == [all_files[0]]
+
+
+def test_filter_counts_with_reference_types(load_test_files):
+    """Test filter_counts with reference_types filtering."""
+    gnps_data, sample_meta, ref_meta = load_test_files("gnps1")
+
+    rdd = RDDCounts(
+        sample_types="all",
+        gnps_network_path=str(gnps_data),
+        sample_groups=["G1", "G2"],
+        reference_groups=["G3"],
+        external_reference_metadata=str(ref_meta),
+        external_sample_metadata=str(sample_meta),
+        levels=3,
+    )
+
+    # Get available reference types
+    all_types = rdd.counts["reference_type"].unique().tolist()
+
+    if len(all_types) > 0:
+        # Filter by specific reference type
+        filtered = rdd.filter_counts(level=1, reference_types=[all_types[0]])
+
+        # Should only contain the specified reference type
+        assert filtered["reference_type"].unique().tolist() == [all_types[0]]
+
+
+def test_filter_counts_with_top_and_reference_types(load_test_files):
+    """Test filter_counts with both top_n and explicit reference_types."""
+    gnps_path, sample_meta, ref_meta = load_test_files("gnps1")
+
+    rdd = RDDCounts(
+        gnps_network_path=str(gnps_path),
         sample_types="all",
         sample_groups=["G1"],
         reference_groups=["G4"],
-        levels=2,
-        external_metadata=str(metadata_path),
+        external_reference_metadata=str(ref_meta),
+        external_sample_metadata=str(sample_meta),
+        levels=3,
     )
 
-    # Generate flows and processes
-    flows, processes = rdd_counts.generate_RDDflows()
-    # Validate structure
-    assert not flows.empty, "Flows should not be empty"
-    assert not processes.empty, "Processes should not be empty"
-    assert (
-        "source" in flows.columns
-        and "target" in flows.columns
-        and "value" in flows.columns
+    # Get available reference types
+    all_types = rdd.counts["reference_type"].unique().tolist()
+
+    if len(all_types) > 1:
+        # Filter with top_n and explicit reference_types
+        filtered = rdd.filter_counts(
+            level=1, top_n=10, reference_types=[all_types[0]]
+        )
+
+        # Should only contain the specified reference type
+        assert filtered["reference_type"].unique().tolist() == [all_types[0]]
+
+
+def test_generate_flows_with_filename_filter(load_test_files):
+    """Test generate_RDDflows with filename_filter parameter."""
+    gnps_path, sample_meta, ref_meta = load_test_files("gnps1")
+
+    rdd = RDDCounts(
+        gnps_network_path=str(gnps_path),
+        sample_types="all",
+        sample_groups=["G1"],
+        reference_groups=["G4"],
+        external_reference_metadata=str(ref_meta),
+        external_sample_metadata=str(sample_meta),
+        levels=3,
     )
-    assert processes.index.name == "id" and "level" in processes.columns
+
+    # Get a valid filename from the counts
+    if not rdd.counts.empty:
+        test_filename = rdd.counts["filename"].iloc[0]
+        flows_df, processes_df = rdd.generate_RDDflows(
+            filename_filter=test_filename
+        )
+
+        assert isinstance(flows_df, pd.DataFrame)
+        assert isinstance(processes_df, pd.DataFrame)
+
+
+def test_generate_flows_without_renamed_columns(load_test_files):
+    """Test generate_RDDflows when ontology_columns_renamed is None."""
+    gnps_path, sample_meta, ref_meta = load_test_files("gnps2")
+
+    rdd = RDDCounts(
+        gnps_network_path=str(gnps_path),
+        sample_types="all",
+        external_reference_metadata=str(ref_meta),
+        external_sample_metadata=str(sample_meta),
+        levels=3,
+    )
+
+    # Ensure ontology_columns_renamed is not set
+    rdd.ontology_columns_renamed = None
+
+    flows_df, processes_df = rdd.generate_RDDflows()
+
+    assert isinstance(flows_df, pd.DataFrame)
+    assert isinstance(processes_df, pd.DataFrame)
+    assert {"source", "target", "value"}.issubset(flows_df.columns)

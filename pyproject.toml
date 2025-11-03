@@ -8,3 +8,12 @@ build-backend = "setuptools.build_meta"
 line-length = 79
 target-version = ["py310"]
 include = '\.pyi?$'
+
+[tool.pytest.ini_options]
+# Matplotlib backend set to Agg in tests/conftest.py for headless CI testing
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+addopts = [
+    "--tb=short",
+]

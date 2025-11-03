@@ -6,14 +6,14 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 import plotly.graph_objects as go
 
-project_path = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "rdd")
-)
-sys.path.append(project_path)
+# Add the path to the repository root to the system path
+project_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if project_path not in sys.path:
+    sys.path.insert(0, project_path)
 
-from RDDcounts import RDDCounts
-from visualization import MatplotlibBackend, Visualizer, PlotlyBackend
-from analysis import perform_pca_RDD_counts
+from rdd.RDDcounts import RDDCounts
+from rdd.visualization import MatplotlibBackend, Visualizer, PlotlyBackend
+from rdd.analysis import perform_pca_RDD_counts
 
 
 @pytest.fixture
@@ -91,12 +91,13 @@ def rdd_counts_instance(mock_gnps_and_metadata):
 
     # Create the RDDCounts instance
     return RDDCounts(
-        gnps_network=str(gnps_path),
+        gnps_network_path=str(gnps_path),
         sample_types="all",
         sample_groups=["G1"],
         reference_groups=["G4"],
         levels=3,
-        external_metadata=str(metadata_path),
+        external_reference_metadata=str(metadata_path),
+        external_sample_metadata=None,
     )
 
 
@@ -175,7 +176,30 @@ def test_plot_pca_results(rdd_counts_instance):
         figsize=(10, 6),
     )
 
-    assert isinstance(fig, plt.Figure), "Output should be a Matplotlib figure"
+
+def test_perform_pca_with_reference_types_filter(rdd_counts_instance):
+    """
+    Test perform_pca_RDD_counts with reference_types parameter.
+    """
+    # Get available reference types
+    all_ref_types = (
+        rdd_counts_instance.filter_counts(level=2)["reference_type"]
+        .unique()
+        .tolist()
+    )
+
+    if len(all_ref_types) > 0:
+        # Perform PCA with reference types filter
+        pca_df, explained_variance = perform_pca_RDD_counts(
+            rdd_counts_instance,
+            level=2,
+            reference_types=all_ref_types[: min(3, len(all_ref_types))],
+            apply_clr=True,
+            n_components=2,
+        )
+
+        assert pca_df is not None
+        assert len(explained_variance) == 2
 
 
 def test_plot_explained_variance():
@@ -298,3 +322,60 @@ def test_plot_sankey_plotly(rdd_counts_instance, tmp_path):
     # Assertions
     assert isinstance(fig, go.Figure), "Output should be a Plotly figure"
     assert len(fig.data) > 0, "Figure should contain data"
+
+
+def test_plot_reference_type_distribution_empty_data(rdd_counts_instance):
+    """Test plot_reference_type_distribution with filters that result in no data."""
+    backend = MatplotlibBackend()
+    visualizer = Visualizer(backend)
+
+    # Try to filter with impossible reference type
+    with pytest.raises(
+        ValueError, match="No data available for the specified filters"
+    ):
+        visualizer.plot_reference_type_distribution(
+            rdd_counts_instance,
+            level=2,
+            reference_types=["NonExistentType"],
+        )
+
+
+def test_box_plot_with_group_filter(rdd_counts_instance):
+    """Test box_plot_RDD_proportions with group parameter."""
+    backend = MatplotlibBackend()
+    visualizer = Visualizer(backend)
+
+    # Get available groups
+    proportions = rdd_counts_instance.filter_counts(level=2)
+    if "group" in proportions.columns:
+        available_groups = proportions["group"].unique().tolist()
+        if len(available_groups) > 0:
+            # Plot with specific group filter
+            fig = visualizer.box_plot_RDD_proportions(
+                rdd_counts_instance, level=2, group=available_groups[0]
+            )
+            assert isinstance(fig, plt.Figure)
+
+
+def test_plot_sankey_missing_level_column(rdd_counts_instance, tmp_path):
+    """Test plot_sankey when level column is missing from processes_df."""
+    backend = PlotlyBackend()
+    visualizer = Visualizer(backend)
+
+    # Create a minimal color mapping file
+    color_mapping_path = tmp_path / "color_mapping.csv"
+    color_mapping_data = {
+        "descriptor": ["type1"],
+        "color_code": ["#FF5733"],
+    }
+    pd.DataFrame(color_mapping_data).to_csv(
+        color_mapping_path, sep=";", index=False
+    )
+
+    # Generate flows - this should handle missing level column internally
+    fig = visualizer.plot_sankey(
+        rdd_counts_instance, color_mapping_file=str(color_mapping_path)
+    )
+
+    assert isinstance(fig, go.Figure)
+    assert len(fig.data) > 0

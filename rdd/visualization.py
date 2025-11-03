@@ -16,8 +16,8 @@ import plotly.graph_objects as go
 
 
 # Internal imports
-from RDDcounts import RDDCounts
-from utils import RDD_counts_to_wide, calculate_proportions
+from .RDDcounts import RDDCounts
+from .utils import RDD_counts_to_wide, calculate_proportions
 
 
 def sort_nodes_by_flow(flows_df, processes_df):
@@ -201,9 +201,16 @@ def filter_and_group_RDD_counts(
     level: int,
     reference_types: Optional[List[str]] = None,
     group_by: bool = False,
+    sample_names: Optional[Union[str, List[str]]] = None,
+    top_n: Optional[int] = None,
+    top_n_method: str = "per_sample",
+    group: Optional[Union[str, List[str]]] = None,
+    upper_level: Optional[int] = None,
+    lower_level: Optional[int] = None,
+    upper_level_reference_types: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     """
-    Filter and group the RDD counts data by ontology level and reference types.
+    Filter and group the RDD counts data by ontology level, reference types, and optional parameters.
 
     Parameters
     ----------
@@ -212,32 +219,36 @@ def filter_and_group_RDD_counts(
     level : int
         The ontology level to filter by.
     reference_types : list of str, optional
-        Specific reference types to include in the filtered data. If None, all reference types
-        are included. Defaults to None.
+        Specific reference types to include in the filtered data.
     group_by : bool, optional
-        Whether to group the data by the 'group' column. Defaults to False.
+        Whether to group the data by the 'group' column.
+    sample_names : str or list of str, optional
+        Filter by specific sample name(s).
+    top_n : int, optional
+        Select the top N reference types.
+    top_n_method : str, optional
+        Method to select top N types: 'per_sample', 'total', or 'average'.
 
     Returns
     -------
     pd.DataFrame
         The filtered and grouped RDD counts data.
-
-    Raises
-    ------
-    ValueError
-        If no data is available for the specified level and reference types.
     """
-    # Filter the data
     filtered_counts = RDD_counts_instance.filter_counts(
-        reference_types=reference_types, level=level
+        reference_types=reference_types,
+        level=level,
+        sample_names=sample_names,
+        top_n=top_n,
+        top_n_method=top_n_method,
+        group=group,
+        upper_level=upper_level,
+        lower_level=lower_level,
+        upper_level_reference_types=upper_level_reference_types,
     )
 
     if filtered_counts.empty:
-        raise ValueError(
-            "No data available for the specified level and reference types."
-        )
+        raise ValueError("No data available for the specified filters.")
 
-    # Group the data
     if group_by:
         data = (
             filtered_counts.groupby(["reference_type", "group"])["count"]
@@ -258,32 +269,21 @@ def prepare_boxplot_data(
     RDD_counts_instance: "RDDCounts",
     level: int,
     reference_types: Optional[List[str]] = None,
+    sample_names: Optional[Union[str, List[str]]] = None,
+    top_n: Optional[int] = None,
+    top_n_method: str = "per_sample",
+    group: Optional[Union[str, List[str]]] = None,
+    upper_level: Optional[int] = None,
+    lower_level: Optional[int] = None,
+    upper_level_reference_types: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     """
     Prepare the RDD proportions data for box plotting.
-
-    Parameters
-    ----------
-    RDD_counts_instance : RDDCounts
-        An instance of the RDDCounts class containing the RDD counts data.
-    level : int
-        The ontology level to filter by.
-    reference_types : list of str, optional
-        Specific reference types to include. If None, all reference types are included.
-
-    Returns
-    -------
-    pd.DataFrame
-        A long-format DataFrame with columns 'reference_type', 'group', and 'proportion'.
-
-    Raises
-    ------
-    ValueError
-        If no reference types are provided or if the filtered data is empty.
     """
-    # Access counts and calculate proportions
-    counts = RDD_counts_instance.counts
-    df_proportions = calculate_proportions(counts, level=level)
+    # Calculate proportions from complete dataset first
+    df_proportions = calculate_proportions(
+        RDD_counts_instance.counts, level=level
+    )
 
     # Convert to long format
     df_long = df_proportions.reset_index().melt(
@@ -292,14 +292,52 @@ def prepare_boxplot_data(
         value_name="proportion",
     )
 
-    # Filter by reference types
-    if reference_types:
+    # Now filter the long-format proportion data
+    if reference_types is not None:
         df_long = df_long[df_long["reference_type"].isin(reference_types)]
 
-    if df_long.empty:
-        raise ValueError(
-            "No data available for the specified reference types."
-        )
+    if sample_names is not None:
+        if isinstance(sample_names, str):
+            sample_names = [sample_names]
+        df_long = df_long[df_long["filename"].isin(sample_names)]
+
+    if group is not None:
+        if isinstance(group, str):
+            group = [group]
+        df_long = df_long[df_long["group"].isin(group)]
+
+    # Handle top_n filtering
+    if top_n is not None and not df_long.empty:
+        if top_n_method == "per_sample":
+            # Top N reference types per sample
+            top_refs = (
+                df_long.sort_values(
+                    ["filename", "proportion"], ascending=[True, False]
+                )
+                .groupby("filename", as_index=False, sort=False)
+                .head(top_n)["reference_type"]
+                .unique()
+            )
+        elif top_n_method == "total":
+            # Get top N reference types overall
+            top_refs = (
+                df_long.groupby("reference_type")["proportion"]
+                .sum()
+                .nlargest(top_n)
+                .index.tolist()
+            )
+        elif top_n_method == "average":
+            # Get top N reference types by average proportion
+            top_refs = (
+                df_long.groupby("reference_type")["proportion"]
+                .mean()
+                .nlargest(top_n)
+                .index.tolist()
+            )
+        else:
+            raise ValueError(f"Unsupported top_n_method: {top_n_method}")
+
+        df_long = df_long[df_long["reference_type"].isin(top_refs)]
 
     return df_long
 
@@ -370,7 +408,6 @@ class MatplotlibBackend(VisualizationBackend):
                 x="reference_type",
                 y="count",
                 data=data,
-                palette="viridis",
                 ax=ax,
             )
 
@@ -387,9 +424,14 @@ class MatplotlibBackend(VisualizationBackend):
         group_by: bool = False,
         group_colors: Optional[dict] = None,
         figsize: Tuple[int, int] = (10, 6),
+        ax=None,
         **kwargs,
     ):
-        fig, ax = plt.subplots(figsize=figsize)
+        # Only create figure if ax is not provided
+        if ax is None:
+            fig, ax = plt.subplots(figsize=figsize)
+        else:
+            fig = ax.get_figure()
 
         if group_by:
             # Grouped boxplot using 'hue'
@@ -400,6 +442,8 @@ class MatplotlibBackend(VisualizationBackend):
                 data=data,
                 ax=ax,
                 palette=group_colors,
+                showfliers=False,
+                orient="v",
                 **kwargs,
             )
             sns.stripplot(
@@ -424,22 +468,21 @@ class MatplotlibBackend(VisualizationBackend):
                 y="proportion",
                 data=data,
                 ax=ax,
-                palette="viridis",
+                showfliers=False,
+                orient="v",
                 **kwargs,
             )
             sns.stripplot(
                 x="reference_type",
                 y="proportion",
                 data=data,
-                dodge=True,  # No separation
+                dodge=False,
                 jitter=True,
-                palette="viridis",
                 ax=ax,
                 marker="o",
                 edgecolor="black",
-                alpha=0.7,
+                alpha=0.3,
                 linewidth=0.6,
-                legend=False,  # Disable legend for stripplot
             )
 
         ax.set_title("Proportion Distribution of Selected reference types")
@@ -494,6 +537,7 @@ class MatplotlibBackend(VisualizationBackend):
         group_by: bool = True,
         group_colors: Optional[dict] = None,
         figsize: Tuple[int, int] = (10, 6),
+        group_column: str = "group",
         **kwargs,
     ):
         """
@@ -515,6 +559,8 @@ class MatplotlibBackend(VisualizationBackend):
             A dictionary mapping group names to colors.
         figsize : tuple of int, optional
             The size of the figure (width, height). Defaults to (10, 6).
+        group_column : str, optional
+            The column name to use for grouping. Defaults to "group".
 
         Returns
         -------
@@ -527,7 +573,7 @@ class MatplotlibBackend(VisualizationBackend):
             sns.scatterplot(
                 x=x_pc,
                 y=y_pc,
-                hue="group",
+                hue=group_column,
                 data=pca_df,
                 palette=group_colors,
                 ax=ax,
@@ -769,6 +815,7 @@ class PlotlyBackend(VisualizationBackend):
         group_by: bool = True,
         group_colors: Optional[dict] = None,
         figsize: Tuple[int, int] = (10, 6),
+        group_column: str = "group",
         **kwargs,
     ):
         """
@@ -790,6 +837,8 @@ class PlotlyBackend(VisualizationBackend):
             A dictionary mapping group names to colors.
         figsize : tuple of int, optional
             Ignored for Plotly but maintained for interface compatibility.
+        group_column : str, optional
+            The column name to use for grouping. Defaults to "group".
 
         Returns
         -------
@@ -799,9 +848,9 @@ class PlotlyBackend(VisualizationBackend):
         fig = go.Figure()
 
         if group_by:
-            groups = pca_df["group"].unique()
+            groups = pca_df[group_column].unique()
             for group in groups:
-                group_data = pca_df[pca_df["group"] == group]
+                group_data = pca_df[pca_df[group_column] == group]
                 fig.add_trace(
                     go.Scatter(
                         x=group_data[x_pc],
@@ -939,6 +988,7 @@ class PlotlyBackend(VisualizationBackend):
         fig = go.Figure(
             data=[
                 go.Sankey(
+                    arrangement="fixed",
                     node=dict(
                         pad=15,
                         thickness=20,
@@ -996,6 +1046,13 @@ class Visualizer:  # pragma: no cover
         level: int = 3,
         reference_types: Optional[List[str]] = None,
         group_by: bool = False,
+        sample_names: Optional[Union[str, List[str]]] = None,
+        top_n: Optional[int] = None,
+        top_n_method: str = "per_sample",
+        upper_level: Optional[int] = None,
+        lower_level: Optional[int] = None,
+        upper_level_reference_types: Optional[List[str]] = None,
+        group: Optional[Union[str, List[str]]] = None,
         figsize: Tuple[int, int] = (10, 6),
         **kwargs,
     ):
@@ -1006,27 +1063,40 @@ class Visualizer:  # pragma: no cover
         ----------
         RDD_counts_instance : RDDCounts
             An instance of the RDDCounts class containing the RDD counts data.
-        level : int, optional
-            The ontology level to filter by. Defaults to 3.
+        level : int
+            The ontology level to filter by.
         reference_types : list of str, optional
-            Specific reference types to include in the plot. If None, all reference types
-            are included. Defaults to None.
+            Specific reference types to include in the plot.
         group_by : bool, optional
-            Whether to group by the 'group' column in the plot. Defaults to False.
-        figsize : tuple of int, optional
-            The size of the figure (width, height). Defaults to (10, 6).
+            Whether to group by the 'group' column in the plot.
+        sample_names : str or list of str, optional
+            Filter by specific sample name(s).
+        top_n : int, optional
+            Select the top N reference types.
+        top_n_method : str, optional
+            Method to select top N reference types.
+        figsize : tuple, optional
+            Size of the plot figure.
 
         Returns
         -------
-        matplotlib.figure.Figure or plotly.graph_objects.Figure
-            The rendered figure object.
+        Figure
+            The rendered figure.
         """
-        # Filter and group the data
         data = filter_and_group_RDD_counts(
-            RDD_counts_instance, level, reference_types, group_by
+            RDD_counts_instance=RDD_counts_instance,
+            level=level,
+            reference_types=reference_types,
+            group_by=group_by,
+            sample_names=sample_names,
+            top_n=top_n,
+            top_n_method=top_n_method,
+            group=group,
+            upper_level=upper_level,
+            lower_level=lower_level,
+            upper_level_reference_types=upper_level_reference_types,
         )
 
-        # Render using the backend
         return self.backend.plot_reference_type_distribution(
             data, group_by=group_by, figsize=figsize, **kwargs
         )
@@ -1039,6 +1109,13 @@ class Visualizer:  # pragma: no cover
         group_by: bool = False,
         group_colors: Optional[dict] = None,
         figsize: Tuple[int, int] = (10, 6),
+        sample_names: Optional[Union[str, List[str]]] = None,
+        top_n: Optional[int] = None,
+        top_n_method: str = "per_sample",
+        group: Optional[Union[str, List[str]]] = None,
+        upper_level: Optional[int] = None,
+        lower_level: Optional[int] = None,
+        upper_level_reference_types: Optional[List[str]] = None,
         **kwargs,
     ):
         """
@@ -1058,18 +1135,31 @@ class Visualizer:  # pragma: no cover
             A dictionary mapping group names to colors. Defaults to None.
         figsize : tuple of int, optional
             The size of the figure (width, height). Defaults to (10, 6).
+        sample_names : str or list of str, optional
+            Filter by specific sample name(s).
+        top_n : int, optional
+            Select top N reference types.
+        top_n_method : str, optional
+            Selection method: 'per_sample', 'total', or 'average'.
 
         Returns
         -------
         matplotlib.figure.Figure or plotly.graph_objects.Figure
             The rendered figure object.
         """
-        # Prepare data
         data = prepare_boxplot_data(
-            RDD_counts_instance, level, reference_types
+            RDD_counts_instance=RDD_counts_instance,
+            level=level,
+            reference_types=reference_types,
+            sample_names=sample_names,
+            top_n=top_n,
+            top_n_method=top_n_method,
+            group=group,
+            upper_level=upper_level,
+            lower_level=lower_level,
+            upper_level_reference_types=upper_level_reference_types,
         )
 
-        # Render using the backend
         return self.backend.box_plot_RDD_proportions(
             data,
             group_by=group_by,
@@ -1124,6 +1214,7 @@ class Visualizer:  # pragma: no cover
         group_by: bool = True,
         group_colors: Optional[dict] = None,
         figsize: Tuple[int, int] = (10, 6),
+        group_column: str = "group",
         **kwargs,
     ):
         """
@@ -1145,6 +1236,8 @@ class Visualizer:  # pragma: no cover
             A dictionary mapping group names to colors.
         figsize : tuple of int, optional
             The size of the figure (width, height). Defaults to (10, 6).
+        group_column : str, optional
+            The column name to use for grouping. Defaults to "group".
 
         Returns
         -------
@@ -1159,6 +1252,7 @@ class Visualizer:  # pragma: no cover
             group_by=group_by,
             group_colors=group_colors,
             figsize=figsize,
+            group_column=group_column,
             **kwargs,
         )
 
