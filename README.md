@@ -1,65 +1,66 @@
-# Global FoodOmics package
+# GNPS Reference Data-Driven (RDD) Metabolomics Package
 
-Current functionality includes generating food counts tables from a molecular network (sample data networked with reference data using classical molecular networking). Follow [Reference Data-Driven Analysis tutorial](https://ccms-ucsd.github.io/GNPSDocumentation/tutorials/rdd/) to run the networking job in GNPS.
+A Python package for reference data-driven analysis of untargeted MS/MS metabolomics data using GNPS Classical Molecular Networking outputs.
 
-## Dependencies
-Make sure you have Python 3.6 or newer installed. You will also need the following packages installed:   
-* numpy   
-    ```
-    pip3 install numpy
-    ```
-* pandas   
-    ```
-    pip3 install pandas
-    ```
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
-## Usage
-1. Clone `main` branch of this repository
+## Overview
 
-    ```
-    git clone -b main https://github.com/global-foodomics/gfop.git
-    ```
+RDD metabolomics contextualizes experimental MS/MS spectra by comparing them against curated reference datasets organized in hierarchical ontologies. Rather than identifying exact molecular structures, this approach infers the likely origin or source of spectra by matching them to reference categories through GNPS molecular networking, even when precise chemical identities remain unknown.
 
-2. Navigate to the package directory
+This method increases MS/MS spectral usage rates from 5-6% to 15-30%—a 3- to 5-fold improvement in data interpretability—enabling researchers to extract biological meaning from previously unannotated spectra.
 
-    ```
-    cd gfop
-    ```
+## Key Features
 
-3. Start Python
+Generate RDD counts from GNPS Classical Molecular Networking outputs with hierarchical reference matching across customizable ontology levels. The package provides flexible filtering and aggregation by ontology level, reference category, or sample group, along with a rich visualization suite supporting both Matplotlib and Plotly backends. Statistical analysis tools include PCA with compositional data support, enabling creation of publication-ready and interactive figures.
 
-    ```
-    python
-    ```
+## Installation
+```bash
+pip install gnps-rdd
+```
 
-4. Import functions
+Or from source:
+```bash
+git clone https://github.com/bittremieux-lab/gnps-rdd.git
+cd gnps-rdd
+pip install -e .
+```
 
-    ```
-    import gfop.get_food_counts as gfop
-    ```
+## Workflow
 
-5. Generate food counts table.   
+1. **Prepare GNPS network**: Upload experimental samples and reference data with hierarchical metadata to GNPS, then run Classical Molecular Networking
+2. **Load and calculate**: Use the package to load GNPS outputs and calculate RDD counts across ontology levels
+3. **Analyze and visualize**: Filter, aggregate, and visualize results using built-in statistical and plotting tools
 
-    ```
-    f_counts = gfop.get_dataset_food_counts(gnps_network = 'METABOLOMICS-SNETS-V2-07f85565-view_all_clusters_withID_beta-main.tsv',
-                                            metadata = 'sample_metadata.csv',
-                                            filename_col = 'filenames',
-                                            sample_types = 'simple',
-                                            all_groups = ['G1'],
-                                            some_groups = ['G4'],
-                                            level = 5)
-    ```
-    * The argument `gnps_network` is the path to the tsv file you will have downloaded from your molecular networking job. Be sure to use the absolute path.   
-    * The argument `metadata` is the path to your sample metadata (csv or tsv file). It must contain a column with the sample filenames. This will be used to match the files added to G1/G2 in the molecular network. Again, use the absolute path.
-    * `filename_col` is the column header in `metadata` that contains the sample filenames.
-    * The argument `sample_types` can be one of: `simple`, `complex`, `all`. Simple foods/beverages are those containing a single ingredient (e.g. apple, milk) whereas complex foods contain multiple ingredients (e.g. granola bar, meal preparation). `sample_types = 'all'` will return both simple and complex foods.
-    * `all_groups` is the molecular networking group(s) used for your samples.
-    * `some_groups` is the molecular networking group(s) used for the reference samples.
-    * `level` is an integer from 0-6 and dictates how broad or specific you want your food categories to be. Level 1 uses the most broad groupings (e.g. plant, animal). Level 6 uses the most specific groupings (e.g. strawberry, green grape). Level 0 indicates no groupings, counts will be returned for all individual reference samples. *Note: this will require matching reference sample names to the food metadata*   
-   
-    You can type `help(gfop.get_dataset_food_counts)` for more information about the required arguments.
-6. Save food counts as csv file   
+See the [GNPS RDD tutorial](https://ccms-ucsd.github.io/GNPSDocumentation/tutorials/rdd/) for detailed networking setup instructions.
 
-    ```
-    f_counts.to_csv('food_counts.csv')
-    ```
+## Use Cases
+
+**Food metabolomics**: Reconstruct dietary patterns from plasma or stool samples by matching against comprehensive food reference databases (e.g., Global FoodOmics Project with 3,500+ food items across 6 hierarchical levels).
+
+**Environmental metabolomics**: Track contamination sources and environmental exposures using location-based or source-type hierarchies.
+
+**Microbial metabolomics**: Link metabolites to taxonomic origins through phylogenetic hierarchies (domain → phylum → class → genus → species).
+
+## Documentation
+
+- **Full documentation**: [https://gnps-rdd.readthedocs.io](https://gnps-rdd.readthedocs.io)
+- **GNPS tutorial**: [https://ccms-ucsd.github.io/GNPSDocumentation/tutorials/rdd/](https://ccms-ucsd.github.io/GNPSDocumentation/tutorials/rdd/)
+- **Web application**: [https://gnps-rdd.streamlit.app/](https://gnps-rdd.streamlit.app/)
+- **Example notebooks**: [rdd/notebooks](rdd/notebooks)
+
+## Citation
+
+If you use this package in your research, please cite:
+```
+Alejandro Mendoza Cantu, Julia M. Gauglitz, Wout Bittremieux. "An open-source platform for reference data-driven analysis of untargeted metabolomics" In preparation (2025).
+```
+
+## License
+
+Apache License 2.0 - see [LICENSE](LICENSE) file for details.
+
+## Support
+
+- **Issues**: [GitHub Issues](https://github.com/bittremieux-lab/gnps-rdd/issues)
