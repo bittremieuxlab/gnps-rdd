@@ -81,7 +81,6 @@ viz.plot_reference_type_distribution(rdd, level=3)
 :caption: User guide
 
 getting_started
-food_ontology
 tutorials/index
 ```
 

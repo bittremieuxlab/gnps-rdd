@@ -44,10 +44,9 @@ def perform_pca_RDD_counts(
     Returns
     -------
     Tuple[pd.DataFrame, List[float]]
-        A tuple containing:
-        - pd.DataFrame: DataFrame with PCA scores, filenames, and merged
-        sample metadata.
-        - List[float]: Explained variance ratios of the principal components.
+        A tuple containing two elements: (1) pd.DataFrame with PCA scores,
+        filenames, and merged sample metadata, and (2) List of floats
+        representing explained variance ratios of the principal components.
 
     Notes
     -----

@@ -120,6 +120,3 @@ For compositional data analysis, apply centered log-ratio transformation before 
   - [RDDCounts](api/rddcounts.md) - Main analysis class
   - [Utilities](api/utils.md) - Data processing functions
   - [Visualization](api/visualization.md) - Plotting functions
-  - [Analysis](api/analysis.md) - Statistical methods
-- Understand [statistical analysis](tutorials/statistical_analysis.md) options
-- See the [food ontology example](examples/food_ontology.md) (Global FoodOmics use case)

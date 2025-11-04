@@ -52,5 +52,9 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+
+# Sphinx documentation
+docs/_build/
+
 # Ignore experimental branch testing folder
 branch_testing/
