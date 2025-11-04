@@ -91,8 +91,13 @@ def mock_sample_metadata(tmp_path):
     """Fixture for external sample metadata."""
     df = pd.DataFrame(
         {
-            "filename": ["sampleA", "sampleB"],
-            "group": ["G1", "G2"],  # Ensure sample names match those in GNPS
+            "filename": ["file_samp_1", "file_samp_2", "sampleA", "sampleB"],
+            "group": [
+                "G1",
+                "G1",
+                "G1",
+                "G1",
+            ],  # Match both GNPS1 and GNPS2 mock network contents
         }
     )
     path = tmp_path / "sample_metadata.csv"

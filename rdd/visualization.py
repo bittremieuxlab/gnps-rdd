@@ -40,12 +40,15 @@ def sort_nodes_by_flow(flows_df, processes_df):
     """
     # Handle missing "id" column by using unique nodes from flows_df
     if "id" not in processes_df.columns:
-        unique_nodes = pd.concat(
-            [flows_df["source"], flows_df["target"]]
-        ).unique()
-        processes_df = pd.DataFrame(
-            {"id": unique_nodes, "level": 0}
-        )  # Assign default level
+        if getattr(processes_df.index, "name", None) == "id":
+            processes_df = processes_df.reset_index()
+        else:
+            unique_nodes = pd.concat(
+                [flows_df["source"], flows_df["target"]]
+            ).unique()
+            processes_df = pd.DataFrame(
+                {"id": unique_nodes, "level": 0}
+            )  # Assign default level
 
     # Ensure "level" column exists
     if "level" not in processes_df.columns:
@@ -292,6 +295,22 @@ def prepare_boxplot_data(
         value_name="proportion",
     )
 
+    # Apply hierarchical filtering if specified
+    if upper_level is not None and upper_level_reference_types is not None:
+        # Get the mapping between upper and lower levels
+        ontology_table = RDD_counts_instance.ontology_table
+        upper_col = RDD_counts_instance.get_ontology_column_for_level(
+            upper_level
+        )
+        lower_col = RDD_counts_instance.get_ontology_column_for_level(level)
+
+        # Filter to only include reference types under the specified upper level types
+        valid_lower_types = ontology_table[
+            ontology_table[upper_col].isin(upper_level_reference_types)
+        ][lower_col].unique()
+
+        df_long = df_long[df_long["reference_type"].isin(valid_lower_types)]
+
     # Now filter the long-format proportion data
     if reference_types is not None:
         df_long = df_long[df_long["reference_type"].isin(reference_types)]
@@ -338,6 +357,9 @@ def prepare_boxplot_data(
             raise ValueError(f"Unsupported top_n_method: {top_n_method}")
 
         df_long = df_long[df_long["reference_type"].isin(top_refs)]
+
+    if df_long.empty:
+        raise ValueError("No data available after applying filters.")
 
     return df_long
 

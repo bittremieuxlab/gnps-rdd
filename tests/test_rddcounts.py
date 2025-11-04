@@ -336,13 +336,21 @@ def test_filter_counts_with_top_and_reference_types(load_test_files):
         levels=3,
     )
 
-    # Get available reference types
-    all_types = rdd.counts["reference_type"].unique().tolist()
+    # Find a level that has data with multiple reference types
+    test_level = None
+    for level in range(rdd.levels + 1):
+        level_data = rdd.counts[rdd.counts["level"] == level]
+        level_types = level_data["reference_type"].unique().tolist()
+        if len(level_types) > 1:
+            test_level = level
+            all_types = level_types
+            break
 
-    if len(all_types) > 1:
+    # Only run the test if we found a suitable level
+    if test_level is not None:
         # Filter with top_n and explicit reference_types
         filtered = rdd.filter_counts(
-            level=1, top_n=10, reference_types=[all_types[0]]
+            level=test_level, top_n=10, reference_types=[all_types[0]]
         )
 
         # Should only contain the specified reference type

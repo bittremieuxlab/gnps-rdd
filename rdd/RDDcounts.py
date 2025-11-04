@@ -430,8 +430,14 @@ class RDDCounts:
                 group = [group]
             filtered_df = filtered_df[filtered_df["group"].isin(group)]
 
-        # Select top N reference types if requested
-        if top_n is not None:
+        # Filter by explicitly provided reference_types first (before top_n)
+        if reference_types is not None:
+            filtered_df = filtered_df[
+                filtered_df["reference_type"].isin(reference_types)
+            ]
+
+        # Select top N reference types if requested (only if reference_types not explicitly provided)
+        if top_n is not None and reference_types is None:
             if top_n_method == "per_sample":
                 top_df = (
                     filtered_df.sort_values(
@@ -468,12 +474,6 @@ class RDDCounts:
 
             filtered_df = filtered_df[
                 filtered_df["reference_type"].isin(top_reference_types)
-            ]
-
-        # Filter again by explicitly provided reference_types
-        if reference_types is not None:
-            filtered_df = filtered_df[
-                filtered_df["reference_type"].isin(reference_types)
             ]
 
         return filtered_df
@@ -646,6 +646,12 @@ class RDDCounts:
             flows.append(flow)
 
         # Concatenate flows into a single DataFrame
+        if not flows:
+            empty_flows = pd.DataFrame(columns=["source", "target", "value"])
+            empty_processes = pd.DataFrame(columns=["level"])
+            empty_processes.index.name = "id"
+            return empty_flows, empty_processes
+
         flows_df = pd.concat(flows, ignore_index=True)
 
         # Build processes from unique nodes in flows

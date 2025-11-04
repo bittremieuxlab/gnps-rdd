@@ -80,7 +80,14 @@ def perform_pca_RDD_counts(
     # Step 6: Standardize the data
     features_scaled = StandardScaler().fit_transform(features)
 
-    # Step 7: Perform PCA
+    # Step 7: Validate n_components and perform PCA
+    n_samples, n_features = features_scaled.shape
+    max_components = min(n_samples, n_features)
+    if n_components > max_components:
+        raise ValueError(
+            f"n_components ({n_components}) must not exceed "
+            f"min(n_samples={n_samples}, n_features={n_features})."
+        )
     pca = PCA(n_components=n_components)
     pca_scores = pca.fit_transform(features_scaled)
     explained_variance = pca.explained_variance_ratio_
