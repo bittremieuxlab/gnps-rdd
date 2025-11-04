@@ -175,6 +175,7 @@ def test_plot_pca_results(rdd_counts_instance):
         group_by=True,
         figsize=(10, 6),
     )
+    assert isinstance(fig, plt.Figure)
 
 
 def test_perform_pca_with_reference_types_filter(rdd_counts_instance):
