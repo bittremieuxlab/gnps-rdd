@@ -60,7 +60,7 @@ from rdd.visualization import Visualizer, MatplotlibBackend
 # Load GNPS network data and calculate RDD counts
 rdd = RDDCounts(
     task_id="your_gnps_task_id",  # GNPS networking job ID
-    sample_types="reference_metadata.tsv",  # Hierarchical metadata file
+    external_reference_metadata="reference_metadata.tsv",  # Hierarchical metadata file
     sample_groups=["G1"],  # Experimental sample group(s)
     reference_groups=["G4"]  # Reference group(s)
 )
