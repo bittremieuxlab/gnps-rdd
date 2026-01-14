@@ -221,8 +221,7 @@ rdd_food_nist_external_metadata.counts.head()
 
 ### Inspect the RDD  reference metadata
 
-The RDD `metadata` is a dataframe containing all reference metadata. Ontology columns, which are identified in the metadata as :
-- **sample_type_groupn**: Where n is the level of the ontology 1 being the least specific and 6 being the most specific category
+The RDD `metadata` is a dataframe containing all reference metadata. Ontology columns are identified in the metadata as `sample_type_groupn`, where n is the level of the ontology (1 being the least specific and 6 being the most specific category).
 
 
 ```python

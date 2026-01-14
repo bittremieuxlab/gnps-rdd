@@ -2,7 +2,7 @@
 
 ## What is reference data-driven metabolomics?
 
-Reference data-driven (RDD) metabolomics contextualizes experimental MS/MS spectra by comparing them against curated reference datasets organized in hierarchical ontologies. Rather than identifying exact molecular structures, this approach infers the likely origin or source of spectra by matching them to reference categories at different classification levels, even when precise chemical identities remain unknown.
+Reference data-driven (RDD) metabolomics contextualizes experimental MS/MS spectra by comparing them against curated reference datasets organized in rchical ontologies. Rather than identifying exact molecular structures, this approach infers the likely origin or source of spectra by matching them to reference categories at different classification levels, even when precise chemical identities remain unknown.
 
 ## How it works
 
