@@ -118,7 +118,7 @@ The `RDDCounts` default behaviour uses the global foodomics project dataset cont
   - The number of `sample_type_groupX` columns in the default metadata (6 levels)
 - You can still explicitly specify `levels` if you want to use fewer levels than available
 
-For detailed information on metadata structure and requirements, see the [Custom metadata tutorial](../../docs/custom_reference_loading.md).
+For detailed information on metadata structure and requirements, see the [Custom metadata tutorial](../custom_reference_loading.md).
 
 
 ```python

@@ -55,7 +55,7 @@ rdd_counts = RDDCounts(
     levels=2  # Only use first 2 levels
 )
 ```
-## Example: Accesing custom metadata
+## Example: Accessing custom metadata
 
 ```python
 rdd_counts.reference_metadata
