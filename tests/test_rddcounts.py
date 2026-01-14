@@ -124,7 +124,7 @@ file2,ref2,type2,subtype2,simple"""
     ref_file.write_text(ref_metadata)
 
     with pytest.raises(
-        ValueError, match=r"levels .* exceeds provided ontology columns"
+        ValueError, match=r"levels .* exceeds available ontology columns"
     ):
         RDDCounts(
             sample_types="all",

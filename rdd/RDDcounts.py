@@ -2,6 +2,7 @@
 
 # Standard library imports
 import os
+import re
 from typing import List, Optional, Tuple, Union
 
 # Third-party imports
@@ -39,8 +40,9 @@ class RDDCounts:
         The column in the sample metadata representing sample group identifiers.
         Default is "group".
     levels : int, optional
-        Number of ontology levels to analyze. Default is 6.
-        If `ontology_columns` is provided, this still sets how many levels are analyzed.
+        Number of ontology levels to analyze. If None (default), automatically determined
+        from ontology_columns length (if provided) or from the default metadata structure.
+        If explicitly set, must not exceed the number of available ontology columns.
     external_reference_metadata : str, optional
         Path to a user-supplied reference metadata file.
         If None, internal foodomics metadata is used.
@@ -58,7 +60,7 @@ class RDDCounts:
         sample_groups: Optional[List[str]] = None,
         reference_groups: Optional[List[str]] = None,
         sample_group_col: str = "group",
-        levels: int = 6,
+        levels: Optional[int] = None,
         external_reference_metadata: Optional[str] = None,
         external_sample_metadata: Optional[str] = None,
         ontology_columns: Optional[List[str]] = None,
@@ -79,7 +81,6 @@ class RDDCounts:
         self.sample_types = sample_types
         self.sample_groups = sample_groups
         self.reference_groups = reference_groups
-        self.levels = levels
         self.sample_group_col = sample_group_col
         self.blank_identifier = blank_identifier
 
@@ -100,11 +101,17 @@ class RDDCounts:
             )
         )
 
-        if self.ontology_columns_renamed:
-            if self.levels > len(self.ontology_columns_renamed):
+        # Auto-determine levels if not specified
+        if levels is None:
+            self.levels = self._determine_ontology_levels()
+        else:
+            self.levels = levels
+            # Validate that specified levels don't exceed available columns
+            available_levels = self._determine_ontology_levels()
+            if self.levels > available_levels:
                 raise ValueError(
-                    f"levels ({self.levels}) exceeds provided ontology columns "
-                    f"({len(self.ontology_columns_renamed)})."
+                    f"levels ({self.levels}) exceeds available ontology columns "
+                    f"({available_levels})."
                 )
 
         self.ontology_table = (
@@ -121,6 +128,29 @@ class RDDCounts:
             self.sample_metadata,
         )
         self.counts = self.create_RDD_counts_all_levels()
+
+    def _determine_ontology_levels(self) -> int:
+        """
+        Determine the number of ontology levels available in the metadata.
+
+        Returns the number of ontology columns either from the user-provided
+        ontology_columns or from the default sample_type_groupX columns in the
+        reference metadata.
+
+        Returns
+        -------
+        int
+            The number of available ontology levels.
+        """
+        if self.ontology_columns_renamed:
+            return len(self.ontology_columns_renamed)
+        
+        # Count sample_type_groupX columns in reference metadata
+        ontology_cols = [
+            col for col in self.reference_metadata.columns
+            if re.match(r"sample_type_group\d+$", col)
+        ]
+        return len(ontology_cols)
 
     def _get_ontology_column_for_level(self, level: int) -> str:
         """

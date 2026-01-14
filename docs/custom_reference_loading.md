@@ -30,14 +30,29 @@ The addition of an ontology classification to the reference dataset enhances the
 
 The metadata file can be uploaded from the user's local directory and should follow the structure of the examples shown above. Users can select custom column names, which can be specified when calling the RDD class. The argument `ontology_columns` accepts an array with the column names corresponding to the ontology classification. However, the columns `filename` and `sample_name` must exist in the metadata. The file can have the .txt, .csv, or .tsv extensions.
 
+The `levels` parameter is optional. When not specified, the number of ontology levels is automatically determined from:
+1. The length of `ontology_columns` if custom columns are provided, or
+2. The number of `sample_type_groupX` columns in the default metadata
+
 ## Example: Loading custom metadata
 ```python
+# Levels will be automatically set to 3 based on ontology_columns length
 rdd_counts = RDDCounts(
     gnps_network_path=network_path,
     external_reference_metadata=metadata_path,
     sample_groups=["G1"],
     reference_groups=["G4"],
     ontology_columns=["level_1", "level_2", "level_3"]
+)
+
+# Or explicitly specify levels (must not exceed available ontology columns)
+rdd_counts = RDDCounts(
+    gnps_network_path=network_path,
+    external_reference_metadata=metadata_path,
+    sample_groups=["G1"],
+    reference_groups=["G4"],
+    ontology_columns=["level_1", "level_2", "level_3"],
+    levels=2  # Only use first 2 levels
 )
 ```
 ## Example: Accesing custom metadata
