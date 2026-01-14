@@ -69,6 +69,29 @@ class RDDCounts:
         gnps_2: bool = True,
     ) -> None:
 
+        """
+        Initialize an RDDCounts instance and prepare all internal data structures used to compute RDD counts across ontology levels.
+        
+        Parameters:
+            sample_types (str): Identifier or path used to load reference/sample ontology assignments.
+            gnps_network_path (Optional[str]): Path to a GNPS network TSV; provide exactly one of this or `task_id`.
+            sample_groups (Optional[List[str]]): Names of sample groups to include when normalizing the GNPS network.
+            reference_groups (Optional[List[str]]): Names of reference groups to include when normalizing the GNPS network.
+            sample_group_col (str): Column name in sample metadata used to assign each filename to a group.
+            levels (Optional[int]): Number of ontology levels to compute. If `None`, levels are auto-determined from available ontology columns; if provided, must not exceed available ontology levels.
+            external_reference_metadata (Optional[str]): Path to external reference metadata to override or supplement embedded metadata.
+            external_sample_metadata (Optional[str]): Path to external sample metadata to override or supplement embedded metadata.
+            ontology_columns (Optional[List[str]]): Explicit list of ontology column names to use when loading sample types; if provided, these may be renamed internally.
+            blank_identifier (str): Reference label used as the blank/water baseline to subtract from counts (default "water").
+            task_id (Optional[str]): GNPS task identifier to fetch network data; provide exactly one of this or `gnps_network_path`.
+            gnps_2 (bool): Whether to fetch GNPS v2-formatted task data when `task_id` is used.
+        
+        Side effects:
+            - Validates that exactly one of `task_id` or `gnps_network_path` is provided and raises ValueError otherwise.
+            - Loads GNPS network, reference metadata, sample metadata, and sample type mappings.
+            - Determines and validates ontology `levels` (auto-detects when `levels` is `None`).
+            - Builds `ontology_table`, normalizes the GNPS network, and computes `file_level_counts` and aggregated `counts` across all taxonomy levels as instance attributes.
+        """
         if (task_id is None) == (gnps_network_path is None):
             raise ValueError(
                 "Provide exactly one of task_id or gnps_network_path."
@@ -131,16 +154,13 @@ class RDDCounts:
 
     def _determine_ontology_levels(self) -> int:
         """
-        Determine the number of ontology levels available in the metadata.
-
-        Returns the number of ontology columns either from the user-provided
-        ontology_columns or from the default sample_type_groupX columns in the
-        reference metadata.
-
-        Returns
-        -------
-        int
-            The number of available ontology levels.
+        Determine how many ontology levels are available for RDD aggregation.
+        
+        Checks for a user-provided list of renamed ontology columns and returns its length if present;
+        otherwise counts columns in `reference_metadata` that match the pattern `sample_type_group{n}`.
+        
+        Returns:
+            int: Number of available ontology levels.
         """
         if self.ontology_columns_renamed:
             return len(self.ontology_columns_renamed)
@@ -154,21 +174,20 @@ class RDDCounts:
 
     def _get_ontology_column_for_level(self, level: int) -> str:
         """
-        Retrieves the appropriate ontology column name corresponding to a given level.
-
-        This method returns the renamed ontology column (if custom ontology columns were
-        provided and renamed), or defaults to the standard column format
-        'sample_type_group{level}'.
-
-        Parameters
-        ----------
-        level : int
-            The ontology level for which to retrieve the column name.
-
-        Returns
-        -------
-        str
-            The name of the ontology column corresponding to the specified level.
+        Return the ontology column name for the specified ontology level.
+        
+        If custom ontology columns were provided (stored in self.ontology_columns_renamed), the method returns
+        the corresponding renamed column; otherwise it returns the default name "sample_type_group{level}".
+        
+        Parameters:
+            level (int): 1-based ontology level to resolve.
+        
+        Returns:
+            str: Column name corresponding to the given level.
+        
+        Raises:
+            ValueError: If `self.ontology_columns_renamed` is set and `level` is outside the valid range
+                        (1..len(self.ontology_columns_renamed)).
         """
         if self.ontology_columns_renamed:
             if level < 1 or level > len(self.ontology_columns_renamed):
