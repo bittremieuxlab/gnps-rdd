@@ -24,7 +24,7 @@ GNPS Molecular Network
         │
         └─ Experimental spectra inherit reference metadata via cluster membership
             │
-            └─ Hierarchical metadata propagation:
+            └─ Reference metadata ontology propagation:
                 ├─ Level 0: Specific files
                 ├─ Level 1: Major class
                 ├─ Level 2: Intermediate class
@@ -32,7 +32,7 @@ GNPS Molecular Network
                 └─ Levels 4+: More specific levels (if available)
 ```
 
-When experimental and reference spectra cluster together based on spectral similarity, the experimental spectrum inherits the hierarchical metadata from the reference spectrum.
+When experimental and reference spectra cluster together based on spectral similarity, the experimental spectrum inherits the reference metadata ontology from the reference spectrum.
 
 ### Count calculation
 
@@ -46,7 +46,7 @@ This creates an RDD count table in long format linking each experimental run to 
 ### Analysis workflow
 
 1. Generate molecular network on GNPS with experimental data in sample groups and reference data in reference groups
-2. Load GNPS networking outputs and hierarchical reference metadata
+2. Load GNPS networking outputs and reference metadata
 3. Calculate RDD counts at all ontology levels by matching cluster assignments to metadata
 4. Filter and aggregate counts by level, reference category, or sample group
 5. Visualize distributions and hierarchical relationships
@@ -60,7 +60,7 @@ from rdd.visualization import Visualizer, MatplotlibBackend
 # Load GNPS network data and calculate RDD counts
 rdd = RDDCounts(
     task_id="your_gnps_task_id",  # GNPS networking job ID
-    external_reference_metadata="reference_metadata.tsv",  # Hierarchical metadata file
+    external_reference_metadata="reference_metadata.tsv",  # Reference metadata file
     sample_groups=["G1"],  # Experimental sample group(s)
     reference_groups=["G4"]  # Reference group(s)
 )
@@ -82,7 +82,7 @@ viz.box_plot_RDD_proportions(rdd, level=2, group_by=True)
 
 ## Key concepts
 
-### Hierarchical metadata levels
+### Reference metadata ontology levels
 
 The reference metadata contains multiple hierarchical levels. The number and meaning of levels depends on your reference dataset:
 

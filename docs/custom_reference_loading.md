@@ -1,4 +1,4 @@
-# Custom metadata tutorial
+# Custom reference data and associated metadata
 
 Reference data-driven (RDD) metabolomics is a flexible method that can be used in domains other than foodomics. The main factor for running an effective RDD analysis is the creation of a reference dataset with its associated curated and rich metadata. We will briefly describe the main components needed to build this reference dataset and how to load it when running an analysis with the gnps-rdd Python package. This tutorial does not delve into the specifics of experimental data acquisition, as this depends on the specific research question and the experimental setup of the researcher. It is important to note that high-resolution MS/MS data is needed for the construction of the references.
 
