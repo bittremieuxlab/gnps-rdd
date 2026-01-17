@@ -11,12 +11,13 @@ This notebook demonstrates the application of Reference data-driven (RDD) metabo
 
 **Key concepts:**
 - **RDD counts**: Number of shared molecular clusters between a sample and reference food categories
-- **Ontology levels**: Hierarchical classification
+- **Reference data**: Data used as reference to match sample spectra and derive RDD analysis
+- **Ontology levels**: Hierarchical classification included in the reference metadata
 
 
 **Dataset:**
 - NIST human biological samples (vegan and omnivore participants)
-- NIST food metabolomics reference library
+- Global Foodomics Project reference dataset (3527 foods)
 - GNPS Molecular networking clustering output
 
 ---
@@ -39,8 +40,6 @@ import matplotlib.pyplot as plt
 ---
 
 ## 2. Load GNPS data and generate RDD counts
-
-
 
 The `RDDCounts` class performs several operations automatically:
 
@@ -100,6 +99,305 @@ except Exception as e:
 
 
     ✓ Successfully loaded data from GNPS
+
+
+## 2.1 Generate RDD counts passing reference metadata as an argument
+
+
+
+The `RDDCounts` default behaviour uses the global foodomics project dataset contained in the Python package. It is possible to use a custom reference dataset to run RDD metabolomics. For this, the MS/MS files of the reference dataset should be the ones used to run the molecular networking job and the metadata associated with them should contain the minimum requirements to identify them.
+
+**Requirements for custom reference metadata:**
+- MS/MS files must be included in the molecular networking job
+- Metadata must contain at minimum: `filename` and `sample_name` columns
+- Recommended: Include ontology classification columns for enhanced analysis capabilities
+
+**Automatic level detection:**
+- When `levels` is not specified, the number of ontology levels is automatically determined from:
+  - The length of `ontology_columns` (if provided), or
+  - The number of `sample_type_groupX` columns in the default metadata (6 levels)
+- You can still explicitly specify `levels` if you want to use fewer levels than available
+
+For detailed information on metadata structure and requirements, see the [Custom metadata tutorial](../custom_reference_loading.md).
+
+
+```python
+# Example 1: Automatic level detection (will detect 3 levels from ontology_columns)
+gnps_food_nist_path = "../data/sample_gnps_vegomn.tsv"
+gfop_metadata_path = "../data/foodomics_multiproject_metadata.txt"
+ontology_columns_gfop = ["sample_type_group1", "sample_type_group2", "sample_type_group3"]
+
+rdd_food_nist_external_metadata = RDDCounts(
+    gnps_network_path=gnps_food_nist_path,
+    external_reference_metadata=gfop_metadata_path,
+    sample_types="simple",
+    sample_groups=["G1"],
+    reference_groups=["G4"],
+    ontology_columns=ontology_columns_gfop
+    # levels parameter not specified - automatically detects 3 levels!
+)
+
+print(f"Number of levels automatically detected: {rdd_food_nist_external_metadata.levels}")
+rdd_food_nist_external_metadata.counts.head()
+```
+
+    Number of levels automatically detected: 3
+
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>filename</th>
+      <th>reference_type</th>
+      <th>count</th>
+      <th>level</th>
+      <th>group</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>NIST_POS_Samp_07-01</td>
+      <td>11442.G72441</td>
+      <td>9</td>
+      <td>0</td>
+      <td>G1</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>NIST_POS_Samp_07-01</td>
+      <td>11442.G72442</td>
+      <td>22</td>
+      <td>0</td>
+      <td>G1</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>NIST_POS_Samp_07-01</td>
+      <td>11442.G72443</td>
+      <td>34</td>
+      <td>0</td>
+      <td>G1</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>NIST_POS_Samp_07-01</td>
+      <td>11442.G72444</td>
+      <td>26</td>
+      <td>0</td>
+      <td>G1</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>NIST_POS_Samp_07-01</td>
+      <td>11442.G72445</td>
+      <td>14</td>
+      <td>0</td>
+      <td>G1</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+
+### Inspect the RDD reference metadata
+
+The RDD `metadata` is a dataframe containing all reference metadata. Ontology columns are identified in the metadata as `sample_type_groupn`, where n is the level of the ontology (1 being the least specific and 6 being the most specific category).
+
+
+```python
+rdd_food_nist.reference_metadata.head()  # Display first few rows of reference metadata
+```
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>filename</th>
+      <th>ontology_terminal_leaf</th>
+      <th>sample_name</th>
+      <th>description</th>
+      <th>simple_complex</th>
+      <th>sample_type</th>
+      <th>sample_type_aquatic_land</th>
+      <th>sample_type_group1</th>
+      <th>sample_type_group2</th>
+      <th>sample_type_group3</th>
+      <th>...</th>
+      <th>upc</th>
+      <th>vegan</th>
+      <th>Vendor_store</th>
+      <th>washed_not</th>
+      <th>washed_specific</th>
+      <th>brand_roast_unique</th>
+      <th>host_subject_id</th>
+      <th>barcode_number</th>
+      <th>image_taken</th>
+      <th>image_on_Massive</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>15NAVY01_V1_ALL_GB2_01_39810</td>
+      <td>complex</td>
+      <td>15NAVY01_V1_ALL</td>
+      <td>15NAVY01_V1_ALL</td>
+      <td>complex</td>
+      <td>food</td>
+      <td>complex</td>
+      <td>complex</td>
+      <td>complex</td>
+      <td>complex</td>
+      <td>...</td>
+      <td>not collected</td>
+      <td>not entered</td>
+      <td>not entered</td>
+      <td>not entered</td>
+      <td>not applicable</td>
+      <td>not applicable</td>
+      <td>15NAVY01_V1_ALL</td>
+      <td>not applicable</td>
+      <td>no</td>
+      <td>False</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>15NAVY01_V1_breakfast_GA7_01_39806</td>
+      <td>complex</td>
+      <td>15NAVY01_V1_breakfast</td>
+      <td>15NAVY01_V1_breakfast</td>
+      <td>complex</td>
+      <td>food</td>
+      <td>complex</td>
+      <td>complex</td>
+      <td>complex</td>
+      <td>complex</td>
+      <td>...</td>
+      <td>not collected</td>
+      <td>not entered</td>
+      <td>not entered</td>
+      <td>not entered</td>
+      <td>not applicable</td>
+      <td>not applicable</td>
+      <td>15NAVY01_V1_breakfast</td>
+      <td>not applicable</td>
+      <td>no</td>
+      <td>False</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>15NAVY01_v1_brk_1_GA4_01_39548</td>
+      <td>peanut</td>
+      <td>15NAVY01_v1_brk_1</td>
+      <td>**Peanut Butter Smooth, 8/14</td>
+      <td>complex</td>
+      <td>food</td>
+      <td>land</td>
+      <td>plant</td>
+      <td>fruit</td>
+      <td>legume</td>
+      <td>...</td>
+      <td>not collected</td>
+      <td>not entered</td>
+      <td>not entered</td>
+      <td>not entered</td>
+      <td>not applicable</td>
+      <td>not applicable</td>
+      <td>15NAVY01_v1_brk_1</td>
+      <td>not applicable</td>
+      <td>yes</td>
+      <td>False</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>15NAVY01_v1_brk_2_GB4_01_39546</td>
+      <td>grain/grass</td>
+      <td>15NAVY01_v1_brk_2</td>
+      <td>Honey Nut Cheerios</td>
+      <td>complex</td>
+      <td>food</td>
+      <td>land</td>
+      <td>plant</td>
+      <td>fruit</td>
+      <td>grain/grass</td>
+      <td>...</td>
+      <td>not collected</td>
+      <td>not entered</td>
+      <td>not entered</td>
+      <td>not entered</td>
+      <td>not applicable</td>
+      <td>not applicable</td>
+      <td>15NAVY01_v1_brk_2</td>
+      <td>not applicable</td>
+      <td>yes</td>
+      <td>False</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>15NAVY01_v1_brk_3_GC4_01_39547</td>
+      <td>grain/grass</td>
+      <td>15NAVY01_v1_brk_3</td>
+      <td>Bread White, Aspen</td>
+      <td>complex</td>
+      <td>food</td>
+      <td>land</td>
+      <td>plant</td>
+      <td>fruit</td>
+      <td>grain/grass</td>
+      <td>...</td>
+      <td>not collected</td>
+      <td>not entered</td>
+      <td>not entered</td>
+      <td>not entered</td>
+      <td>not applicable</td>
+      <td>not applicable</td>
+      <td>15NAVY01_v1_brk_3</td>
+      <td>not applicable</td>
+      <td>yes</td>
+      <td>False</td>
+    </tr>
+  </tbody>
+</table>
+<p>5 rows × 158 columns</p>
+</div>
+
 
 
 ### Inspect the RDD counts data
@@ -198,7 +496,7 @@ rdd_food_nist.counts.head()
 
 Replace generic group identifiers (G1, G4) with meaningful labels (Vegan, Omnivore).
 
-### Metadata File Requirements:
+### Sample Metadata File Requirements:
 The CSV file should contain:
 - `filename`: Sample identifiers matching those in the RDD counts
 - `new_group`: Diet classification (e.g., "Vegan", "Omnivore")
@@ -474,23 +772,23 @@ plt.tight_layout()
 plt.show()
 ```
 
-    /tmp/ipykernel_3036/2066313885.py:27: UserWarning: set_ticklabels() should only be used with a fixed number of ticks, i.e. after set_ticks() or using a FixedLocator.
+    /tmp/ipykernel_1119/2066313885.py:27: UserWarning: set_ticklabels() should only be used with a fixed number of ticks, i.e. after set_ticks() or using a FixedLocator.
       axes[idx].set_xticklabels(axes[idx].get_xticklabels(), ha='center')
-    /tmp/ipykernel_3036/2066313885.py:27: UserWarning: set_ticklabels() should only be used with a fixed number of ticks, i.e. after set_ticks() or using a FixedLocator.
+    /tmp/ipykernel_1119/2066313885.py:27: UserWarning: set_ticklabels() should only be used with a fixed number of ticks, i.e. after set_ticks() or using a FixedLocator.
       axes[idx].set_xticklabels(axes[idx].get_xticklabels(), ha='center')
-    /tmp/ipykernel_3036/2066313885.py:27: UserWarning: set_ticklabels() should only be used with a fixed number of ticks, i.e. after set_ticks() or using a FixedLocator.
+    /tmp/ipykernel_1119/2066313885.py:27: UserWarning: set_ticklabels() should only be used with a fixed number of ticks, i.e. after set_ticks() or using a FixedLocator.
       axes[idx].set_xticklabels(axes[idx].get_xticklabels(), ha='center')
-    /tmp/ipykernel_3036/2066313885.py:27: UserWarning: set_ticklabels() should only be used with a fixed number of ticks, i.e. after set_ticks() or using a FixedLocator.
+    /tmp/ipykernel_1119/2066313885.py:27: UserWarning: set_ticklabels() should only be used with a fixed number of ticks, i.e. after set_ticks() or using a FixedLocator.
       axes[idx].set_xticklabels(axes[idx].get_xticklabels(), ha='center')
-    /tmp/ipykernel_3036/2066313885.py:27: UserWarning: set_ticklabels() should only be used with a fixed number of ticks, i.e. after set_ticks() or using a FixedLocator.
+    /tmp/ipykernel_1119/2066313885.py:27: UserWarning: set_ticklabels() should only be used with a fixed number of ticks, i.e. after set_ticks() or using a FixedLocator.
       axes[idx].set_xticklabels(axes[idx].get_xticklabels(), ha='center')
-    /tmp/ipykernel_3036/2066313885.py:27: UserWarning: set_ticklabels() should only be used with a fixed number of ticks, i.e. after set_ticks() or using a FixedLocator.
+    /tmp/ipykernel_1119/2066313885.py:27: UserWarning: set_ticklabels() should only be used with a fixed number of ticks, i.e. after set_ticks() or using a FixedLocator.
       axes[idx].set_xticklabels(axes[idx].get_xticklabels(), ha='center')
 
 
 
     
-![png](example_notebook_files/example_notebook_13_1.png)
+![png](example_notebook_files/example_notebook_17_1.png)
     
 
 
@@ -606,7 +904,7 @@ plt.show()
 
 
     
-![png](example_notebook_files/example_notebook_18_0.png)
+![png](example_notebook_files/example_notebook_22_0.png)
     
 
 

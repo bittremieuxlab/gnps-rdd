@@ -82,6 +82,7 @@ viz.plot_reference_type_distribution(rdd, level=3)
 
 getting_started
 ontology
+custom_reference_loading
 tutorials/index
 ```
 
